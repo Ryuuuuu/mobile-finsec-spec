@@ -5,7 +5,7 @@
 GUI/AI 없이 Python relay가 합성 HTTP 메시지를 실제 전달하면서 RECORD~STOP 범위의 요청/응답을 영속 저장하고 재시작 후 조회할 수 있다. P1·기기·Appium·GPUI·점검 실행과 독립이다. 기록은 점검 판정을 생성하지 않는다.
 
 - Python 3.11+ 표준 라이브러리, loopback client → loopback relay → 고정 loopback QA upstream.
-- 지원: HTTP/1.1 origin-form GET/POST, Content-Length 또는 body 없는 메시지, 연결당 요청/최종 응답 한 쌍. 요청/응답 framing을 검증하며 TCP read chunk를 메시지로 세지 않는다.
+- 지원: HTTP/1.1 origin-form GET/POST, 요청 Content-Length 또는 요청 body 없음(응답은 Content-Length 필수), 연결당 요청/최종 응답 한 쌍. 요청/응답 framing을 검증하며 TCP read chunk를 메시지로 세지 않는다.
 - 제외: TLS/CA/복호화, CONNECT, HTTP/2·3, QUIC, chunked/close-delimited body, upgrade, interim response, keep-alive/pipelining, 실제 앱 routing/attribution, replay·변조, AI·UI, 자동 네트워크 설정 변경.
 - Hawkeye 문서만 설계 참고한다. 원본 경로 접근이나 코드 복제는 하지 않는다.
 
@@ -17,7 +17,7 @@ v1 JSON 출력은 schema_version, event_id, timestamp를 가진다. recording_id
 
 `serve`는 표준입력 command ID가 있는 ON/OFF/RECORD/STOP/STATUS/QUIT 명령을 처리하고 JSON을 출력한다. 저장된 recording 목록, packet 목록/상세는 별도 `query` CLI에서 페이지 단위로 조회한다. SQLite의 metadata 및 BLOB을 함께 사용한다(PoC 축소; 별도 blob store는 통합 과제).
 
-같은 command_id+payload는 기존 결과를 반환하고 다른 payload는 conflict다. 변경 명령은 단일 asyncio lock에서 직렬화한다. command 결과는 저장 후 응답하며 process crash 직전의 mutation/결과 원자성까지 보장하지 않는다. 재시작은 항상 OFF로 안전하게 시작하고 미완료 기록은 interrupted/partial로 회수한다. 재시작 후 오래된 성공 명령 재시도는 과거 결과임을 session_id로 식별한다.
+변경 명령의 같은 command_id+payload는 기존 결과를 반환하고 다른 payload는 conflict다. STATUS는 캐시하지 않는 조회다. 변경 명령은 단일 asyncio lock에서 직렬화한다. command 결과는 저장 후 응답하며 process crash 직전의 mutation/결과 원자성까지 보장하지 않는다. 재시작은 항상 OFF로 안전하게 시작하고 미완료 기록은 interrupted/partial로 회수한다. 재시작 후 오래된 성공 명령 재시도는 과거 결과임을 session_id로 식별한다.
 
 ## 경계와 실패
 
@@ -43,4 +43,4 @@ capture coverage는 complete_for_supported_scope/partial/none/unknown이며 실�
 ## 단계별 기록
 
 - 단계 1: 기존 설계/P0 읽기 완료. 저장소 및 상위 경로에서 적용할 AGENTS.md/관련 .agents SKILL.md 없음. 이 명세를 구현 전에 커밋한다.
-- 단계 2: 구현과 합성 시험 결과는 후속 commit의 VALIDATION.md에 기록한다.
+- 단계 2: 독립 relay/SQLite/CLI/합성 fixture 구현. 초기 28개 loopback 시험 통과 후 CLI·저장 장애 회귀 검증을 추가한다. 최종 결과는 VALIDATION.md에 기록한다.
