@@ -1,15 +1,15 @@
 # Windows 실행 안내
 
-이 ZIP은 독립 P1 PoC입니다. 자동으로 사용자 PC나 기기에 연결되지 않습니다. 지금 제공된 자동 테스트 결과는 Linux 클라우드 결과이며 Windows/실기기 결과가 아닙니다. 실제 금융 앱은 지원하지 않고 `dev.finsec.poc`만 허용합니다.
+이 안내는 Git 저장소 또는 소스 ZIP으로 받은 독립 P1 PoC에 적용됩니다. 자동으로 사용자 PC나 기기에 연결되지 않습니다. 지금 제공된 자동 테스트 결과는 Linux 클라우드 결과이며 Windows/실기기 결과가 아닙니다. 실제 금융 앱은 지원하지 않고 `dev.finsec.poc`만 허용합니다.
 
 ## 준비
 
 - Windows 10/11, Python **3.12.x** (python.org 설치 시 Tcl/Tk 포함), Node **22.12.0 이상 22.x** 또는 **24.x**, npm >=10, JDK 17 또는 21.
 - Android Studio SDK Manager에서 Android SDK Platform **35**, Build-Tools **35.0.0**, Android SDK Platform-Tools 설치. 앱 최소 Android 8/API26. Platform-Tools는 SDK Manager 최신 배포를 사용하되 `adb version`을 실기기 보고에 기록합니다.
 - `JAVA_HOME`은 JDK, `ANDROID_HOME`은 Android SDK 폴더. `%ANDROID_HOME%\platform-tools`를 PATH에 추가. 다른 장치 작업·Appium 세션을 종료합니다.
-- 소스를 짧은 로컬 경로(예: `C:\work\mobile-finsec-poc`)에 압축 해제. Node 의존성은 배포 ZIP에 포함하지 않았습니다.
+- Git clone을 사용한다면 저장소의 `pocs\p1-record-replay`로 이동합니다. 소스 ZIP은 짧은 경로(예: `C:\work\mobile-finsec-poc`)에 압축 해제하고 `package.json`, `pc`, `android`가 있는 폴더로 이동합니다. 이후 명령의 기준 디렉터리를 **PoC 루트**라고 부릅니다. Node 의존성과 빌드된 APK는 Git 소스에 포함하지 않습니다.
 
-PowerShell, 압축을 푼 폴더에서:
+PowerShell, PoC 루트에서:
 
 ```powershell
 py -3.12 -m unittest discover -s tests -v
@@ -21,6 +21,33 @@ npx --no-install appium driver doctor uiautomator2
 
 `package-lock.json`은 Appium **3.1.0**, UiAutomator2 **6.0.0** 및 전이 의존성의 정확한 npm 버전/무결성을 고정합니다. 프로젝트 폴더에서 실행해야 npm 방식 드라이버 발견이 작동합니다. 별도 전역 `driver install latest`로 바꾸지 않습니다. npm postinstall은 실행하지 않으며 필요한 UiAutomator2 server APK는 패키지에 포함되어 있습니다. 새 Android 버전 호환성은 실기기에서 확인해야 합니다.
 
+## APK 준비: 두 가지 배포 형태
+
+**A. Git clone / 소스 ZIP만 받은 경우 (기본 경로)**
+
+빌드된 APK가 없으므로 PoC 루트에서 먼저 빌드합니다.
+
+```powershell
+Push-Location android
+try {
+    .\gradlew.bat --no-daemon assembleDebug
+    if ($LASTEXITCODE -ne 0) { throw "APK build failed" }
+} finally {
+    Pop-Location
+}
+$ApkPath = (Resolve-Path .\android\app\build\outputs\apk\debug\app-debug.apk -ErrorAction Stop).Path
+```
+
+**B. 별도로 제공된 사전 빌드 APK를 받은 경우**
+
+실제 받은 `finsec-poc-debug.apk`를 PoC 루트의 `artifacts` 폴더에 복사한 경우에만 아래 경로를 사용합니다. `artifacts`와 APK는 Git에서 제외되어 있으므로 clone만으로 이 파일이 생기지 않습니다. 소스 ZIP에도 APK가 포함되었다고 가정하지 마세요.
+
+```powershell
+$ApkPath = (Resolve-Path .\artifacts\finsec-poc-debug.apk -ErrorAction Stop).Path
+```
+
+두 경로는 동일 테스트 앱의 서로 다른 배포 방식입니다. 직접 빌드한 APK는 빌드 환경/서명 키에 따라 제공 APK와 해시가 달라질 수 있습니다. APK를 준비한 PowerShell을 유지하고 아래 설치를 진행합니다.
+
 ## 설치와 연결 (사용자가 집에서 명시적으로 수행)
 
 1. Android 개발자 옵션/USB debugging을 켜고 본인이 승인한 PC의 RSA 프롬프트를 기기에서 확인합니다. 자동 승인/우회는 하지 않습니다.
@@ -28,7 +55,7 @@ npx --no-install appium driver doctor uiautomator2
 3. 아래 `YOUR_SERIAL`을 실제 serial로 교체합니다. 설치는 선택한 테스트 앱을 변경합니다. 기존 테스트 데이터가 필요하면 먼저 보존하세요. 프로그램은 자동 설치/삭제/clear-data하지 않습니다.
 
 ```powershell
-adb -s YOUR_SERIAL install artifacts\finsec-poc-debug.apk
+adb -s YOUR_SERIAL install "$ApkPath"
 npm run appium
 ```
 
@@ -83,11 +110,8 @@ STOP은 입력을 닫고 완료 route를 저장합니다. 실행 도중 STOP/Can
 - 증거에는 앱 화면/UI tree/공개 QA 입력이 들어갑니다. 테스트 앱 외 foreground로 바뀌면 다음 작업을 중단하지만 순간적인 외부 전환의 모든 픽셀 노출을 차단하는 제품은 아닙니다. 이 테스트 동안 다른 앱을 사용하지 마세요.
 - 실제 비밀번호/계좌를 입력하지 마세요. public fixture 4개 문자열 외의 text는 거부합니다.
 
-## 소스에서 APK 다시 빌드
+## 다시 빌드할 때의 주의사항
 
-```powershell
-cd android
-.\gradlew.bat --no-daemon assembleDebug
-```
+위 APK 준비 A 절차를 **PoC 루트**에서 다시 실행합니다. `Push-Location`/`Pop-Location`으로 빌드 후에도 PoC 루트를 유지합니다.
 
-Gradle **8.9**, Android Gradle Plugin **8.7.3**, SDK **35**, Build-Tools **35.0.0**. `app\build\outputs\apk\debug\app-debug.apk`가 생성됩니다. debug 키는 본인 환경에서 생성됩니다. 배포 ZIP에는 개인 키를 포함하지 않습니다. 새 빌드는 서명/해시가 달라 기존 route와 호환되지 않을 수 있으므로 새 기록을 만듭니다. `targetSdk=28`은 이 격리 fixture의 인셋을 단순화하기 위한 선택이며 최신 Android 제품 보안 기준 준수 주장이 아닙니다.
+Gradle **8.9**, Android Gradle Plugin **8.7.3**, SDK **35**, Build-Tools **35.0.0**. PoC 루트 기준 `android\app\build\outputs\apk\debug\app-debug.apk`가 생성됩니다. debug 키는 본인 환경에서 생성됩니다. 배포 ZIP에는 개인 키를 포함하지 않습니다. 새 빌드는 서명/해시가 달라 기존 route와 호환되지 않을 수 있으므로 새 기록을 만듭니다. `targetSdk=28`은 이 격리 fixture의 인셋을 단순화하기 위한 선택이며 최신 Android 제품 보안 기준 준수 주장이 아닙니다.
