@@ -1,0 +1,79 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "mode": "synthetic",
+  "check_id": "CHK-07",
+  "title": "OS 변조 탐지 기능 적용 — synthetic-only PoC",
+  "source_reference": [
+    "docs/spec/09-checks-poc.md#4",
+    "docs/07-poc-plan.md#p3",
+    "docs/spec/08-evidence-results.md"
+  ],
+  "source_scope_status": "provisional",
+  "official_id": null,
+  "implementation_group": "E",
+  "supported_platforms": [
+    "aos"
+  ],
+  "implementation_status": "synthetic_only",
+  "adapter": "synthetic_fixture",
+  "rule_contract": "CHK-07.synthetic.v1",
+  "skill_version": "1.0.0",
+  "skills": {
+    "common": {
+      "path": "common/SKILL.md",
+      "sha256": "7b3f5a368145fed8216a667f17ed3dd9ee35caf0a6e598251baf3c2586fa0be6"
+    },
+    "aos": {
+      "path": "aos/SKILL.md",
+      "sha256": "af17ae2e7eb28bf0db92bf8059b9a36d85cf9a4bba105820cdc6e76081fc75ab"
+    }
+  },
+  "requirements": {
+    "device": "Explicit synthetic baseline_id and test_id; no device access.",
+    "root": "stock baseline and tampered test fixture attestations; unknown is not stock.",
+    "os": "aos contract only; no real OS probe.",
+    "tool": "Python 3.11+; jsonschema 4.26.0; synthetic fixture adapter only.",
+    "artifact": "Synthetic package_id and build_sha256 shared across baseline/test.",
+    "route": "Not used; route_refs must be empty.",
+    "packets": "Not used; packet_refs must be empty.",
+    "profile": "Explicit protected-service scopes and checkpoint oracle.",
+    "evidence": "Synthetic observation envelopes with membership, byte length and SHA-256 validation."
+  },
+  "steps": [
+    "preflight",
+    "baseline",
+    "observation",
+    "verification",
+    "result",
+    "cleanup",
+    "finalization"
+  ],
+  "fixture_schema": "../../schemas/input.schema.json",
+  "result_schema": "../../schemas/result.schema.json",
+  "expected_evidence": [
+    "synthetic stock baseline service success",
+    "synthetic tampered-state attestation",
+    "synthetic protected-service outcome and checkpoint",
+    "synthetic block reason for pass",
+    "synthetic cleanup result"
+  ],
+  "pass_rule": "All required scopes have coherent stock baseline service success, tampered state proof, matching protected-service blocked oracle and os_tamper block reason.",
+  "fail_rule": "At least one coherent scope has stock baseline service success and proven tampered protected-service actual allowed oracle. Preserve this result if another scope is incomplete or cleanup fails.",
+  "inconclusive_rule": "Required evidence, baseline, state proof or oracle absent; launch-only; unknown crash; context mismatch; same-scope contradictory evidence. A nonempty reason is required.",
+  "timeouts": {
+    "step_timeout_ms": 1000,
+    "total_timeout_ms": 10000
+  },
+  "side_effect_policy": "Only create a new output directory; no device/network/subprocess or real evidence input.",
+  "idempotency_policy": "Never overwrite an existing output directory. New execution needs a new output location; fixture replay may repeat deterministic IDs in isolated bundles.",
+  "initial_state_verification": "Match synthetic baseline/test target, package/build, scope/service/checkpoint; require stock baseline allowed oracle for each verdict-bearing scope.",
+  "limitations": [
+    "Synthetic fixtures only; no real Android adapter.",
+    "No real financial-app judgment or official regulatory certification.",
+    "Logical time only; no OS process timeout/cancellation claim.",
+    "Follow-up blocked is metadata for a future scheduler, not a device lease."
+  ],
+  "cancel": "Synthetic cooperative cancellation between observations; preserve collected verified evidence and always attempt synthetic cleanup.",
+  "cleanup": "Synthetic restoration only. failed/unknown block follow-up and require recovery, without overriding a proven fail."
+}

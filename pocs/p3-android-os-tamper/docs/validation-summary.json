@@ -1,0 +1,98 @@
+{
+  "synthetic": true,
+  "schema_version": "1.0",
+  "scope": "controlled fixtures only; no real device",
+  "schemas_valid": 8,
+  "cli_runs": [
+    {
+      "synthetic": true,
+      "fixture": "pass",
+      "iteration": 1,
+      "execution_status": "completed",
+      "verdict": "pass",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "pass",
+      "iteration": 2,
+      "execution_status": "completed",
+      "verdict": "pass",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "pass",
+      "iteration": 3,
+      "execution_status": "completed",
+      "verdict": "pass",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "fail",
+      "iteration": 1,
+      "execution_status": "completed",
+      "verdict": "fail",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "fail",
+      "iteration": 2,
+      "execution_status": "completed",
+      "verdict": "fail",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "fail",
+      "iteration": 3,
+      "execution_status": "completed",
+      "verdict": "fail",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "inconclusive",
+      "iteration": 1,
+      "execution_status": "completed",
+      "verdict": "inconclusive",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "inconclusive",
+      "iteration": 2,
+      "execution_status": "completed",
+      "verdict": "inconclusive",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    },
+    {
+      "synthetic": true,
+      "fixture": "inconclusive",
+      "iteration": 3,
+      "execution_status": "completed",
+      "verdict": "inconclusive",
+      "run_exit": 0,
+      "validate_exit": 0,
+      "evidence_count": 2
+    }
+  ]
+}

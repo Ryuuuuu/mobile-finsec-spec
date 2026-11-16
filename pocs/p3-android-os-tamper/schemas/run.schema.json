@@ -1,0 +1,683 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mobile-finsec:p3:synthetic:run:1.0",
+  "title": "CHK-07 synthetic-only run v1",
+  "description": "Controlled synthetic output; semantic replay and membership/hash verification are additionally required. This schema never certifies real-device observations.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "source": {
+      "const": "synthetic_fixture"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "check_id": {
+      "const": "CHK-07"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "input": {
+      "type": "object",
+      "properties": {
+        "schema_version": {
+          "const": "1.0"
+        },
+        "synthetic": {
+          "const": true
+        },
+        "mode": {
+          "const": "synthetic"
+        },
+        "check_id": {
+          "const": "CHK-07"
+        },
+        "project_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "session_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "run_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "attempt_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+        },
+        "platform": {
+          "const": "aos"
+        },
+        "device": {
+          "type": "object",
+          "properties": {
+            "baseline_id": {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            },
+            "test_id": {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            }
+          },
+          "required": [
+            "baseline_id",
+            "test_id"
+          ],
+          "additionalProperties": false
+        },
+        "app": {
+          "type": "object",
+          "properties": {
+            "package_id": {
+              "const": "dev.finsec.synthetic"
+            },
+            "build_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "package_id",
+            "build_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "profile": {
+          "type": "object",
+          "properties": {
+            "profile_id": {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            },
+            "scopes": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "scope_id": {
+                    "type": "string",
+                    "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+                  },
+                  "service_id": {
+                    "type": "string",
+                    "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+                  },
+                  "checkpoint_id": {
+                    "anyOf": [
+                      {
+                        "type": "string",
+                        "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "scope_id",
+                  "service_id",
+                  "checkpoint_id"
+                ],
+                "additionalProperties": false
+              },
+              "maxItems": 10
+            }
+          },
+          "required": [
+            "profile_id",
+            "scopes"
+          ],
+          "additionalProperties": false
+        },
+        "route_refs": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "packet_refs": {
+          "type": "array",
+          "maxItems": 0
+        },
+        "observations": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "observation_id": {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              "phase": {
+                "type": "string",
+                "enum": [
+                  "baseline",
+                  "test"
+                ]
+              },
+              "scope_id": {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              "device_id": {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              "package_id": {
+                "const": "dev.finsec.synthetic"
+              },
+              "build_sha256": {
+                "type": "string",
+                "pattern": "^[0-9a-f]{64}$"
+              },
+              "service_id": {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              "checkpoint_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "state": {
+                "type": "string",
+                "enum": [
+                  "stock",
+                  "tampered",
+                  "unknown"
+                ]
+              },
+              "state_proof": {
+                "type": "string",
+                "enum": [
+                  "fixture_attestation",
+                  "missing"
+                ]
+              },
+              "outcome": {
+                "type": "string",
+                "enum": [
+                  "allowed",
+                  "blocked",
+                  "launch_only",
+                  "crash",
+                  "unknown"
+                ]
+              },
+              "oracle": {
+                "type": "string",
+                "enum": [
+                  "service_checkpoint",
+                  "none"
+                ]
+              },
+              "block_reason": {
+                "type": "string",
+                "enum": [
+                  "os_tamper",
+                  "other",
+                  "unknown",
+                  "none"
+                ]
+              },
+              "cost_ms": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 10000
+              }
+            },
+            "required": [
+              "observation_id",
+              "phase",
+              "scope_id",
+              "device_id",
+              "package_id",
+              "build_sha256",
+              "service_id",
+              "checkpoint_id",
+              "state",
+              "state_proof",
+              "outcome",
+              "oracle",
+              "block_reason",
+              "cost_ms"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 100
+        },
+        "faults": {
+          "type": "object",
+          "properties": {
+            "interrupt_after": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1000
+            },
+            "interrupt_kind": {
+              "type": "string",
+              "enum": [
+                "none",
+                "timeout",
+                "cancel",
+                "tool_error"
+              ]
+            },
+            "cleanup": {
+              "type": "string",
+              "enum": [
+                "completed",
+                "failed",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "interrupt_after",
+            "interrupt_kind",
+            "cleanup"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "schema_version",
+        "synthetic",
+        "mode",
+        "check_id",
+        "project_id",
+        "session_id",
+        "run_id",
+        "attempt_id",
+        "timestamp",
+        "platform",
+        "device",
+        "app",
+        "profile",
+        "route_refs",
+        "packet_refs",
+        "observations",
+        "faults"
+      ],
+      "additionalProperties": false
+    },
+    "contract_snapshot": {
+      "type": "object",
+      "properties": {
+        "manifest": {
+          "type": "object",
+          "properties": {
+            "schema_version": {
+              "const": "1.0"
+            },
+            "synthetic": {
+              "const": true
+            },
+            "mode": {
+              "const": "synthetic"
+            },
+            "check_id": {
+              "const": "CHK-07"
+            },
+            "title": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "source_reference": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "source_scope_status": {
+              "const": "provisional"
+            },
+            "official_id": {
+              "type": "null"
+            },
+            "implementation_group": {
+              "const": "E"
+            },
+            "supported_platforms": {
+              "const": [
+                "aos"
+              ]
+            },
+            "implementation_status": {
+              "const": "synthetic_only"
+            },
+            "adapter": {
+              "const": "synthetic_fixture"
+            },
+            "rule_contract": {
+              "const": "CHK-07.synthetic.v1"
+            },
+            "skill_version": {
+              "const": "1.0.0"
+            },
+            "steps": {
+              "const": [
+                "preflight",
+                "baseline",
+                "observation",
+                "verification",
+                "result",
+                "cleanup",
+                "finalization"
+              ]
+            },
+            "fixture_schema": {
+              "const": "../../schemas/input.schema.json"
+            },
+            "result_schema": {
+              "const": "../../schemas/result.schema.json"
+            },
+            "expected_evidence": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "pass_rule": {
+              "const": "All required scopes have coherent stock baseline service success, tampered state proof, matching protected-service blocked oracle and os_tamper block reason."
+            },
+            "fail_rule": {
+              "const": "At least one coherent scope has stock baseline service success and proven tampered protected-service actual allowed oracle. Preserve this result if another scope is incomplete or cleanup fails."
+            },
+            "inconclusive_rule": {
+              "const": "Required evidence, baseline, state proof or oracle absent; launch-only; unknown crash; context mismatch; same-scope contradictory evidence. A nonempty reason is required."
+            },
+            "side_effect_policy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "idempotency_policy": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "initial_state_verification": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "limitations": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 4096
+              },
+              "maxItems": 32,
+              "minItems": 1
+            },
+            "cancel": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "cleanup": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 4096
+            },
+            "skills": {
+              "type": "object",
+              "properties": {
+                "common": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "const": "common/SKILL.md"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "additionalProperties": false
+                },
+                "aos": {
+                  "type": "object",
+                  "properties": {
+                    "path": {
+                      "const": "aos/SKILL.md"
+                    },
+                    "sha256": {
+                      "type": "string",
+                      "pattern": "^[0-9a-f]{64}$"
+                    }
+                  },
+                  "required": [
+                    "path",
+                    "sha256"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "common",
+                "aos"
+              ],
+              "additionalProperties": false
+            },
+            "requirements": {
+              "type": "object",
+              "properties": {
+                "device": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "root": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "os": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "tool": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "artifact": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "route": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "packets": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "profile": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                },
+                "evidence": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4096
+                }
+              },
+              "required": [
+                "device",
+                "root",
+                "os",
+                "tool",
+                "artifact",
+                "route",
+                "packets",
+                "profile",
+                "evidence"
+              ],
+              "additionalProperties": false
+            },
+            "timeouts": {
+              "type": "object",
+              "properties": {
+                "step_timeout_ms": {
+                  "const": 1000
+                },
+                "total_timeout_ms": {
+                  "const": 10000
+                }
+              },
+              "required": [
+                "step_timeout_ms",
+                "total_timeout_ms"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "required": [
+            "schema_version",
+            "synthetic",
+            "mode",
+            "check_id",
+            "title",
+            "source_reference",
+            "source_scope_status",
+            "official_id",
+            "implementation_group",
+            "supported_platforms",
+            "implementation_status",
+            "adapter",
+            "rule_contract",
+            "skill_version",
+            "steps",
+            "fixture_schema",
+            "result_schema",
+            "expected_evidence",
+            "pass_rule",
+            "fail_rule",
+            "inconclusive_rule",
+            "side_effect_policy",
+            "idempotency_policy",
+            "initial_state_verification",
+            "limitations",
+            "cancel",
+            "cleanup",
+            "skills",
+            "requirements",
+            "timeouts"
+          ],
+          "additionalProperties": false
+        },
+        "skills": {
+          "type": "object",
+          "properties": {
+            "common": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536
+            },
+            "aos": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 65536
+            }
+          },
+          "required": [
+            "common",
+            "aos"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "manifest",
+        "skills"
+      ],
+      "additionalProperties": false
+    },
+    "cancel_requested": {
+      "type": "boolean"
+    },
+    "selected_check_ids": {
+      "const": [
+        "CHK-07"
+      ]
+    },
+    "clock": {
+      "const": "synthetic_logical"
+    },
+    "tool_version": {
+      "const": "1.0.0"
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "source",
+    "project_id",
+    "session_id",
+    "run_id",
+    "check_id",
+    "attempt_id",
+    "input",
+    "contract_snapshot",
+    "cancel_requested",
+    "selected_check_ids",
+    "clock",
+    "tool_version"
+  ],
+  "additionalProperties": false
+}

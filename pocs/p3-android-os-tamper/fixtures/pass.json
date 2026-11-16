@@ -1,0 +1,71 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "mode": "synthetic",
+  "check_id": "CHK-07",
+  "project_id": "synthetic-project-p3",
+  "session_id": "synthetic-session-p3",
+  "run_id": "synthetic-run-pass",
+  "attempt_id": "synthetic-attempt-001",
+  "timestamp": "2026-11-16T00:00:00Z",
+  "platform": "aos",
+  "device": {
+    "baseline_id": "synthetic-device-stock",
+    "test_id": "synthetic-device-tampered"
+  },
+  "app": {
+    "package_id": "dev.finsec.synthetic",
+    "build_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  },
+  "profile": {
+    "profile_id": "synthetic-profile-protected-service",
+    "scopes": [
+      {
+        "scope_id": "synthetic-scope-service",
+        "service_id": "synthetic-service-transfer-preview",
+        "checkpoint_id": "synthetic-checkpoint-protected-result"
+      }
+    ]
+  },
+  "route_refs": [],
+  "packet_refs": [],
+  "observations": [
+    {
+      "observation_id": "synthetic-observation-baseline",
+      "phase": "baseline",
+      "scope_id": "synthetic-scope-service",
+      "device_id": "synthetic-device-stock",
+      "package_id": "dev.finsec.synthetic",
+      "build_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "service_id": "synthetic-service-transfer-preview",
+      "checkpoint_id": "synthetic-checkpoint-protected-result",
+      "state": "stock",
+      "state_proof": "fixture_attestation",
+      "outcome": "allowed",
+      "oracle": "service_checkpoint",
+      "block_reason": "none",
+      "cost_ms": 10
+    },
+    {
+      "observation_id": "synthetic-observation-test",
+      "phase": "test",
+      "scope_id": "synthetic-scope-service",
+      "device_id": "synthetic-device-tampered",
+      "package_id": "dev.finsec.synthetic",
+      "build_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "service_id": "synthetic-service-transfer-preview",
+      "checkpoint_id": "synthetic-checkpoint-protected-result",
+      "state": "tampered",
+      "state_proof": "fixture_attestation",
+      "outcome": "blocked",
+      "oracle": "service_checkpoint",
+      "block_reason": "os_tamper",
+      "cost_ms": 10
+    }
+  ],
+  "faults": {
+    "interrupt_after": null,
+    "interrupt_kind": "none",
+    "cleanup": "completed"
+  }
+}

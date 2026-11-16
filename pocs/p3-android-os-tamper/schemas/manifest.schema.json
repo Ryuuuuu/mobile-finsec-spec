@@ -1,0 +1,288 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mobile-finsec:p3:synthetic:manifest:1.0",
+  "title": "CHK-07 synthetic-only manifest v1",
+  "description": "Controlled synthetic output; semantic replay and membership/hash verification are additionally required. This schema never certifies real-device observations.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "mode": {
+      "const": "synthetic"
+    },
+    "check_id": {
+      "const": "CHK-07"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "source_reference": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "maxItems": 32,
+      "minItems": 1
+    },
+    "source_scope_status": {
+      "const": "provisional"
+    },
+    "official_id": {
+      "type": "null"
+    },
+    "implementation_group": {
+      "const": "E"
+    },
+    "supported_platforms": {
+      "const": [
+        "aos"
+      ]
+    },
+    "implementation_status": {
+      "const": "synthetic_only"
+    },
+    "adapter": {
+      "const": "synthetic_fixture"
+    },
+    "rule_contract": {
+      "const": "CHK-07.synthetic.v1"
+    },
+    "skill_version": {
+      "const": "1.0.0"
+    },
+    "steps": {
+      "const": [
+        "preflight",
+        "baseline",
+        "observation",
+        "verification",
+        "result",
+        "cleanup",
+        "finalization"
+      ]
+    },
+    "fixture_schema": {
+      "const": "../../schemas/input.schema.json"
+    },
+    "result_schema": {
+      "const": "../../schemas/result.schema.json"
+    },
+    "expected_evidence": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "maxItems": 32,
+      "minItems": 1
+    },
+    "pass_rule": {
+      "const": "All required scopes have coherent stock baseline service success, tampered state proof, matching protected-service blocked oracle and os_tamper block reason."
+    },
+    "fail_rule": {
+      "const": "At least one coherent scope has stock baseline service success and proven tampered protected-service actual allowed oracle. Preserve this result if another scope is incomplete or cleanup fails."
+    },
+    "inconclusive_rule": {
+      "const": "Required evidence, baseline, state proof or oracle absent; launch-only; unknown crash; context mismatch; same-scope contradictory evidence. A nonempty reason is required."
+    },
+    "side_effect_policy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "idempotency_policy": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "initial_state_verification": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 4096
+      },
+      "maxItems": 32,
+      "minItems": 1
+    },
+    "cancel": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "cleanup": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "skills": {
+      "type": "object",
+      "properties": {
+        "common": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "const": "common/SKILL.md"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false
+        },
+        "aos": {
+          "type": "object",
+          "properties": {
+            "path": {
+              "const": "aos/SKILL.md"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "common",
+        "aos"
+      ],
+      "additionalProperties": false
+    },
+    "requirements": {
+      "type": "object",
+      "properties": {
+        "device": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "root": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "os": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "tool": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "artifact": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "route": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "packets": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        },
+        "evidence": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 4096
+        }
+      },
+      "required": [
+        "device",
+        "root",
+        "os",
+        "tool",
+        "artifact",
+        "route",
+        "packets",
+        "profile",
+        "evidence"
+      ],
+      "additionalProperties": false
+    },
+    "timeouts": {
+      "type": "object",
+      "properties": {
+        "step_timeout_ms": {
+          "const": 1000
+        },
+        "total_timeout_ms": {
+          "const": 10000
+        }
+      },
+      "required": [
+        "step_timeout_ms",
+        "total_timeout_ms"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "mode",
+    "check_id",
+    "title",
+    "source_reference",
+    "source_scope_status",
+    "official_id",
+    "implementation_group",
+    "supported_platforms",
+    "implementation_status",
+    "adapter",
+    "rule_contract",
+    "skill_version",
+    "steps",
+    "fixture_schema",
+    "result_schema",
+    "expected_evidence",
+    "pass_rule",
+    "fail_rule",
+    "inconclusive_rule",
+    "side_effect_policy",
+    "idempotency_policy",
+    "initial_state_verification",
+    "limitations",
+    "cancel",
+    "cleanup",
+    "skills",
+    "requirements",
+    "timeouts"
+  ],
+  "additionalProperties": false
+}

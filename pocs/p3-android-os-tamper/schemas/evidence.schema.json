@@ -1,0 +1,183 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mobile-finsec:p3:synthetic:evidence:1.0",
+  "title": "CHK-07 synthetic-only evidence v1",
+  "description": "Controlled synthetic output; semantic replay and membership/hash verification are additionally required. This schema never certifies real-device observations.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "source": {
+      "const": "synthetic_fixture"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "check_id": {
+      "const": "CHK-07"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "evidence_id": {
+      "type": "string",
+      "pattern": "^synthetic-evidence-[0-9]{4}$"
+    },
+    "event_id": {
+      "type": "string",
+      "pattern": "^synthetic-event-[0-9]{4}$"
+    },
+    "tool_call_id": {
+      "type": "string",
+      "pattern": "^synthetic-tool-[0-9]{4}$"
+    },
+    "captured_at_utc": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "clock": {
+      "const": "synthetic_logical"
+    },
+    "observation": {
+      "type": "object",
+      "properties": {
+        "observation_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "phase": {
+          "type": "string",
+          "enum": [
+            "baseline",
+            "test"
+          ]
+        },
+        "scope_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "device_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "package_id": {
+          "const": "dev.finsec.synthetic"
+        },
+        "build_sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "service_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "checkpoint_id": {
+          "anyOf": [
+            {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "state": {
+          "type": "string",
+          "enum": [
+            "stock",
+            "tampered",
+            "unknown"
+          ]
+        },
+        "state_proof": {
+          "type": "string",
+          "enum": [
+            "fixture_attestation",
+            "missing"
+          ]
+        },
+        "outcome": {
+          "type": "string",
+          "enum": [
+            "allowed",
+            "blocked",
+            "launch_only",
+            "crash",
+            "unknown"
+          ]
+        },
+        "oracle": {
+          "type": "string",
+          "enum": [
+            "service_checkpoint",
+            "none"
+          ]
+        },
+        "block_reason": {
+          "type": "string",
+          "enum": [
+            "os_tamper",
+            "other",
+            "unknown",
+            "none"
+          ]
+        },
+        "cost_ms": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000
+        }
+      },
+      "required": [
+        "observation_id",
+        "phase",
+        "scope_id",
+        "device_id",
+        "package_id",
+        "build_sha256",
+        "service_id",
+        "checkpoint_id",
+        "state",
+        "state_proof",
+        "outcome",
+        "oracle",
+        "block_reason",
+        "cost_ms"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "source",
+    "project_id",
+    "session_id",
+    "run_id",
+    "check_id",
+    "attempt_id",
+    "evidence_id",
+    "event_id",
+    "tool_call_id",
+    "captured_at_utc",
+    "clock",
+    "observation"
+  ],
+  "additionalProperties": false
+}

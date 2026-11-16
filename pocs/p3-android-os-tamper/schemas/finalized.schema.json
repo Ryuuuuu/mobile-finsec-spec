@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mobile-finsec:p3:synthetic:finalized:1.0",
+  "title": "CHK-07 synthetic-only finalized v1",
+  "description": "Controlled synthetic output; semantic replay and membership/hash verification are additionally required. This schema never certifies real-device observations.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "source": {
+      "const": "synthetic_fixture"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "check_id": {
+      "const": "CHK-07"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "finalized": {
+      "const": true
+    },
+    "finalization_version": {
+      "const": "1.0"
+    },
+    "result_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "source",
+    "project_id",
+    "session_id",
+    "run_id",
+    "check_id",
+    "attempt_id",
+    "finalized",
+    "finalization_version",
+    "result_hash"
+  ],
+  "additionalProperties": false
+}

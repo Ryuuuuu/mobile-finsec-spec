@@ -83,8 +83,9 @@ source/collection_method=synthetic_fixture를 유지한다. timestamp는 fixture
 완료 marker는 모든 쓰기와 검증 성공 후에만 생성한다. 저장 실패는 정상 완료로
 표시하지 않는다. hash는 손상 탐지이며 합성 진실성/실기기 출처 인증이 아니다.
 CLI exit: 0=실행 completed(취약/불가능 포함), 2=입력/계약/저장/검증 오류,
-3=timeout, 4=cancel, 5=not_run. cleanup 오류는 execution=failed, exit 2이나
-기존 verdict는 유지한다. 종료 명령 재호출 대신 새 run/output을 사용한다.
+3=timeout, 4=cancel, 5=not_run. cleanup 오류는 완료 실행을 execution=failed, exit 2로
+전환하지만 기존 timed_out/cancelled/not_run 및 verdict는 유지한다. 미완료 예정 관측이
+있는 scope는 양호가 될 수 없다. 종료 명령 재호출 대신 새 run/output을 사용한다.
 
 ## 검증 게이트와 후속 조건
 

@@ -1,0 +1,475 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:mobile-finsec:p3:synthetic:result:1.0",
+  "title": "CHK-07 synthetic-only result v1",
+  "description": "Controlled synthetic output; semantic replay and membership/hash verification are additionally required. This schema never certifies real-device observations.",
+  "type": "object",
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "synthetic": {
+      "const": true
+    },
+    "source": {
+      "const": "synthetic_fixture"
+    },
+    "project_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "session_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "run_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "check_id": {
+      "const": "CHK-07"
+    },
+    "attempt_id": {
+      "type": "string",
+      "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+    },
+    "execution_status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "failed",
+        "timed_out",
+        "cancelled",
+        "not_run"
+      ]
+    },
+    "verdict": {
+      "type": "string",
+      "enum": [
+        "pass",
+        "fail",
+        "inconclusive"
+      ]
+    },
+    "reason_code": {
+      "type": "string",
+      "enum": [
+        "OBSERVATION_MISSING",
+        "INCOMPLETE_OBSERVATION_SET",
+        "ORACLE_UNDEFINED",
+        "TARGET_MISMATCH",
+        "CONFLICTING_OBSERVATIONS",
+        "BASELINE_UNPROVEN",
+        "TAMPER_UNPROVEN",
+        "SERVICE_UNPROVEN",
+        "TAMPERED_SERVICE_ALLOWED",
+        "TAMPERED_SERVICE_BLOCKED",
+        "BLOCK_CAUSE_UNPROVEN",
+        "PRECONDITION_MISSING",
+        "RUN_CANCELLED_BEFORE_START",
+        "TOOL_TIMEOUT",
+        "RUN_CANCELLED",
+        "TOOL_ERROR",
+        "INCOMPLETE_SCOPE",
+        "ALL_SCOPES_BLOCKED",
+        "CLEANUP_FAILED",
+        "CLEANUP_UNKNOWN"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2048
+    },
+    "cleanup_status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "failed",
+        "unknown"
+      ]
+    },
+    "follow_up_blocked": {
+      "type": "boolean"
+    },
+    "recovery_required": {
+      "type": "boolean"
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "synthetic": {
+            "const": true
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "OBSERVATION_MISSING",
+              "INCOMPLETE_OBSERVATION_SET",
+              "ORACLE_UNDEFINED",
+              "TARGET_MISMATCH",
+              "CONFLICTING_OBSERVATIONS",
+              "BASELINE_UNPROVEN",
+              "TAMPER_UNPROVEN",
+              "SERVICE_UNPROVEN",
+              "TAMPERED_SERVICE_ALLOWED",
+              "TAMPERED_SERVICE_BLOCKED",
+              "BLOCK_CAUSE_UNPROVEN",
+              "PRECONDITION_MISSING",
+              "RUN_CANCELLED_BEFORE_START",
+              "TOOL_TIMEOUT",
+              "RUN_CANCELLED",
+              "TOOL_ERROR",
+              "INCOMPLETE_SCOPE",
+              "ALL_SCOPES_BLOCKED",
+              "CLEANUP_FAILED",
+              "CLEANUP_UNKNOWN"
+            ]
+          },
+          "phase": {
+            "type": "string",
+            "enum": [
+              "execution",
+              "cleanup"
+            ]
+          }
+        },
+        "required": [
+          "synthetic",
+          "code",
+          "phase"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 2,
+      "minItems": 0
+    },
+    "tested_scope": {
+      "type": "object",
+      "properties": {
+        "synthetic": {
+          "const": true
+        },
+        "platform": {
+          "const": "aos"
+        },
+        "app": {
+          "type": "object",
+          "properties": {
+            "package_id": {
+              "const": "dev.finsec.synthetic"
+            },
+            "build_sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          },
+          "required": [
+            "package_id",
+            "build_sha256"
+          ],
+          "additionalProperties": false
+        },
+        "device": {
+          "type": "object",
+          "properties": {
+            "baseline_id": {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            },
+            "test_id": {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            }
+          },
+          "required": [
+            "baseline_id",
+            "test_id"
+          ],
+          "additionalProperties": false
+        },
+        "profile_id": {
+          "type": "string",
+          "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+        },
+        "scopes": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scope_id": {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              "service_id": {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              "checkpoint_id": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              }
+            },
+            "required": [
+              "scope_id",
+              "service_id",
+              "checkpoint_id"
+            ],
+            "additionalProperties": false
+          },
+          "maxItems": 10,
+          "minItems": 0
+        }
+      },
+      "required": [
+        "synthetic",
+        "platform",
+        "app",
+        "device",
+        "profile_id",
+        "scopes"
+      ],
+      "additionalProperties": false
+    },
+    "scope_results": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "synthetic": {
+            "const": true
+          },
+          "scope_id": {
+            "type": "string",
+            "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+          },
+          "service_id": {
+            "type": "string",
+            "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+          },
+          "checkpoint_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "verdict": {
+            "type": "string",
+            "enum": [
+              "pass",
+              "fail",
+              "inconclusive"
+            ]
+          },
+          "reason_code": {
+            "type": "string",
+            "enum": [
+              "OBSERVATION_MISSING",
+              "INCOMPLETE_OBSERVATION_SET",
+              "ORACLE_UNDEFINED",
+              "TARGET_MISMATCH",
+              "CONFLICTING_OBSERVATIONS",
+              "BASELINE_UNPROVEN",
+              "TAMPER_UNPROVEN",
+              "SERVICE_UNPROVEN",
+              "TAMPERED_SERVICE_ALLOWED",
+              "TAMPERED_SERVICE_BLOCKED",
+              "BLOCK_CAUSE_UNPROVEN",
+              "PRECONDITION_MISSING",
+              "RUN_CANCELLED_BEFORE_START",
+              "TOOL_TIMEOUT",
+              "RUN_CANCELLED",
+              "TOOL_ERROR",
+              "INCOMPLETE_SCOPE",
+              "ALL_SCOPES_BLOCKED",
+              "CLEANUP_FAILED",
+              "CLEANUP_UNKNOWN"
+            ]
+          },
+          "reason": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 2048
+          },
+          "observation_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+            },
+            "maxItems": 100,
+            "minItems": 0,
+            "uniqueItems": true
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "pattern": "^synthetic-evidence-[0-9]{4}$"
+            },
+            "maxItems": 100,
+            "minItems": 0,
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "synthetic",
+          "scope_id",
+          "service_id",
+          "checkpoint_id",
+          "verdict",
+          "reason_code",
+          "reason",
+          "observation_refs",
+          "evidence_refs"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 10,
+      "minItems": 0
+    },
+    "limitations": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 2048
+      },
+      "maxItems": 20,
+      "minItems": 1
+    },
+    "evidence_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^synthetic-evidence-[0-9]{4}$"
+      },
+      "maxItems": 100,
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "observation_refs": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^synthetic-[a-z0-9][a-z0-9._-]{0,95}$"
+      },
+      "maxItems": 100,
+      "minItems": 0,
+      "uniqueItems": true
+    },
+    "started_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "ended_at": {
+      "type": "string",
+      "format": "date-time",
+      "pattern": "^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}(\\.[0-9]{1,6})?Z$"
+    },
+    "duration_monotonic_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000
+    },
+    "clock": {
+      "const": "synthetic_logical"
+    },
+    "config_hash": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "skill_version": {
+      "const": "1.0.0"
+    },
+    "skill_hashes": {
+      "type": "object",
+      "properties": {
+        "common": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "aos": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "common",
+        "aos"
+      ],
+      "additionalProperties": false
+    },
+    "backend_snapshot": {
+      "type": "object",
+      "properties": {
+        "synthetic": {
+          "const": true
+        },
+        "adapter": {
+          "const": "synthetic_fixture"
+        },
+        "version": {
+          "const": "1.0.0"
+        },
+        "ai": {
+          "const": false
+        }
+      },
+      "required": [
+        "synthetic",
+        "adapter",
+        "version",
+        "ai"
+      ],
+      "additionalProperties": false
+    }
+  },
+  "required": [
+    "schema_version",
+    "synthetic",
+    "source",
+    "project_id",
+    "session_id",
+    "run_id",
+    "check_id",
+    "attempt_id",
+    "execution_status",
+    "verdict",
+    "reason_code",
+    "reason",
+    "cleanup_status",
+    "follow_up_blocked",
+    "recovery_required",
+    "errors",
+    "tested_scope",
+    "scope_results",
+    "limitations",
+    "evidence_refs",
+    "observation_refs",
+    "started_at",
+    "ended_at",
+    "duration_monotonic_ms",
+    "clock",
+    "config_hash",
+    "skill_version",
+    "skill_hashes",
+    "backend_snapshot"
+  ],
+  "additionalProperties": false
+}
