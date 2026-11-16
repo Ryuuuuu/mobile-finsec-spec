@@ -30,4 +30,6 @@
 
 - [P1: Android 합성 테스트 앱 + PC 입력 기록/Appium 재생](pocs/p1-record-replay/README.md)
 - 클라우드 자동 테스트 27/27 통과 및 APK 빌드 완료. Windows 실기기 인수시험은 별도 검증 대상이며 통과를 주장하지 않습니다.
-- proxy/AI/점검 스크립트 PoC와 최종 GPUI 앱은 아직 구현 완료 범위가 아닙니다.
+- [P2: 독립 HTTP 릴레이 + RECORD/STOP 영속 기록·조회](pocs/p2-proxy-relay/README.md)
+- P2 클라우드 합성 검증 38/38 통과 및 별도 CLI 20건 전달·저장 확인. 제한된 HTTP/1.1만 지원하며 Windows·실기기 routing·TLS는 미검증/미구현입니다.
+- PoC 간 통합, AI 연동과 최종 GPUI 앱은 아직 구현 완료 범위가 아닙니다.
