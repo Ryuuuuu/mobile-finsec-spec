@@ -17,7 +17,8 @@
 5. [Hawkeye 재사용 검토](docs/05-hawkeye-review.md)
 6. [결정 및 미확정 사항](docs/06-decisions.md)
 7. [분리형 PoC 계획](docs/07-poc-plan.md)
-8. [변경 이력](CHANGELOG.md)
+8. [UI 검토용 시안 v2: 전체 화면 5장](docs/mockups/README.md)
+9. [변경 이력](CHANGELOG.md)
 
 **확정 요구사항**과 **설계 제안/미확정 상세**를 구분합니다. 사용자의 승인이 없는 세부 제안은 구현 확정 사항으로 취급하지 않습니다.
 
