@@ -40,7 +40,7 @@ packet eligibility는 recording 전체의 partial 라벨만 보지 않고 해당
 
 START에서 server-side preflight를 다시 수행한다. context hash가 달라지면 새 결과를 반환한다. 부적합 항목을 조용히 건너뛰고 실행하지 않는다. 사용자가 수정할 때까지 시작을 차단한다. context hash는 device stable ID+connection generation, capability revision, app/artifact fingerprint, sealed route/packet revision, config/Skill/provider capability hash 같은 의미 있는 필드로 계산한다. heartbeat 시각이나 UI 정렬 순서는 포함하지 않는다.
 
-실행 관리자는 요청 validation → device lease 획득 → lease 안에서 변경 가능한 기기/앱 조건 재검사 → snapshot/run 생성 순서로 처리한다. preflight와 lease 사이 기기 분리/앱 교체가 있으면 실패시키고 lease를 정리한다. 이후 각 mutation tool도 lease generation과 필요한 precondition을 다시 확인한다. 통과 시 선택 항목/variant/Skill hash/설정/기기/앱/route/packet을 immutable run plan으로 고정한다.
+실행 관리자는 요청 형식 validation → run ID 발급(created) → device lease 획득 → lease 안에서 변경 가능한 기기/앱 조건 재검사 → immutable plan snapshot 확정 순서로 처리한다. preflight와 lease 사이 기기 분리/앱 교체가 있으면 실패시키고 lease를 정리한다. lease busy와 preflight 실패도 run ID 발급 후라면 선택 항목을 not_run으로 최종화한다. 이후 각 mutation tool도 lease generation과 필요한 precondition을 다시 확인한다. 통과 시 선택 항목/variant/Skill hash/설정/기기/앱/route/packet을 immutable run plan으로 고정한다.
 
 ## 판정 기준
 
