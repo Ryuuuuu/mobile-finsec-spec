@@ -1,5 +1,7 @@
 node_modules/
 .tools/
+.cache/
+.evidence/
 outputs/
 __pycache__/
 *.pyc

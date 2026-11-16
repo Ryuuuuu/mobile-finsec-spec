@@ -65,6 +65,18 @@ Appium은 localhost:4723에만 수신합니다. `--relaxed-security`를 추가�
 py -3.12 -m pc.ui --device YOUR_SERIAL --package dev.finsec.poc
 ```
 
+세션 생성 HTTP 요청은 helper 설치와 instrumentation 시작을 포함하므로 기본 통신 timeout을 **90초**로 분리했습니다. 일반 입력·조회·DELETE 요청은 **20초**, action의 postcondition timeout은 기존 **1~15초**를 유지합니다. 필요한 경우 `--session-create-timeout 120`처럼 **30~300초의 정수**를 지정할 수 있습니다. 이 값은 HTTP 통신 대기시간이며 전체 설치 과정의 완료를 보장하는 제한시간은 아닙니다. 기기/드라이버 내부의 설치·실행 timeout은 별도로 적용됩니다.
+
+대기시간을 늘려도 설치 검증 실패, 사용자 확인 화면, 지원되지 않는 Android 버전은 해결되지 않습니다. 시간초과 시 서버에서 세션이 이미 생성됐을 수도 있으므로 자동 재시도하지 않으며 기존 `.active`/`.quarantine` 복구 절차를 따릅니다. 원인을 확인하기 전 반복해서 Connect를 누르지 마세요.
+
+고정된 UiAutomator2 6.0.0은 초기화 중 Settings 및 서버 helper를 설치하고, hidden API 정책 완화와 helper의 mock-location 권한 설정을 시도할 수 있습니다. 연결 전에 필요한 변경 범위에 동의하고 원래 값을 기록한 뒤, 종료 후 복구를 확인해야 합니다. 드라이버의 기본값 복구가 사용자의 기존 값 복원과 같다고 가정하지 않습니다. 설치가 확인 화면이나 검증 실패로 막히면 그 상태를 확인하고 중단하며 전역 보안 기능을 끄지 않습니다.
+
+`skipDeviceInitialization` 등 임시 옵션은 이 문제의 일반적인 해결책이 아닙니다. 해당 옵션으로도 hidden API 변경이나 mock-location 설정 시도가 남을 수 있고, `skipServerInstallation`은 설치 검사를 생략합니다. 이 수정에서는 이러한 옵션을 기본값으로 추가하지 않았습니다. 별도의 사전 설치 프로필은 helper 버전·해시·서명·설정 복구 검증이 갖춰진 뒤 검토해야 합니다.
+
+이 보완의 회귀 검증은 Windows/Python 3.13에서 합성 unit·fake HTTP 테스트 **39/39 통과**와 CLI 인자 검증으로 제한됩니다. 새 테스트는 timeout 선택·범위, 불확실한 결과의 재시도 금지, 잠금 권한 거부와 handle 정리를 확인합니다. 권장 Python 3.12와는 버전 차이가 있으며, 변경 후 기기 재연결·GUI 시험은 수행하지 않았습니다. 따라서 기본 초기화의 실기기 성공이나 P1 전체 인수시험 통과를 의미하지 않습니다.
+
+Windows npm 설치에서는 기존 lockfile의 Sharp 플랫폼 선택 의존성 누락 22개로 `npm ci`가 실패하는 경우를 재현했습니다. 기존 잠금 항목과 Appium/UiAutomator2 버전을 유지하고 공식 npm 레지스트리의 버전·tarball·SHA512와 일치하는 누락 항목만 추가한 뒤, `npm ci --ignore-scripts --no-audit --no-fund`와 Windows x64 Sharp 로드를 확인했습니다. 이 설치 검증도 Android 기기 호환성 검증을 대신하지 않습니다.
+
 `Connect / launch`는 지정 패키지만 시작하며, 앱 상태를 자동 reset하지 않습니다. 설치 APK 경로를 ADB로 읽어 SHA256을 비교하므로 이 조회가 불가능한 기기에서는 중단합니다. 서명 동일성까지 증명하는 제품 구현은 아닙니다. 다른 기기에 route를 자동 이식하지 않습니다.
 
 ## 첫 10단계 동선 (FLAG_SECURE OFF)
@@ -104,7 +116,8 @@ STOP은 입력을 닫고 완료 route를 저장합니다. 실행 도중 STOP/Can
 
 ## 중단·복구·파일
 
-- 정상 닫기는 현재 유한 요청을 기다리고 DELETE session 성공 후 lease를 해제합니다. Appium 서버는 사용자가 시작한 것이므로 프로그램이 강제 종료하지 않습니다. 종료 대기에는 요청당 최대 20초가 걸릴 수 있습니다.
+- 정상 닫기는 현재 유한 요청을 기다리고 DELETE session 성공 후 lease를 해제합니다. Appium 서버는 사용자가 시작한 것이므로 프로그램이 강제 종료하지 않습니다. 일반 요청의 통신 timeout은 20초이고, 세션 생성 중 닫으면 별도로 설정한 생성 timeout(기본 90초)의 영향도 받습니다.
+- Windows에서 잠금 파일 접근 권한 오류가 나면 recorder를 **같은 Windows 사용자 계정**으로 실행하고 `%USERPROFILE%\.mobile-finsec-poc`의 접근 권한을 확인하세요. 다른 계정·격리 환경에서 같은 사용자 경로를 가리키면 접근이 거부될 수 있습니다. 프로그램은 대체 잠금 경로를 만들거나 ACL을 바꾸거나 기존 marker를 삭제해서 우회하지 않습니다. 파일 초기화 실패 시 열린 handle은 닫습니다.
 - timeout/프로세스 crash에는 `%USERPROFILE%\.mobile-finsec-poc`에 `.active`/`.quarantine`이 남습니다. 이 상태는 자동 해제하지 않습니다. **Appium 서버를 종료하고 진행 중 기기 명령이 없음을 직접 확인한 후에만**, 해당 장치 해시의 marker를 수동 제거하고 서버/프로그램을 재시작하세요. 다른 실행이 살아 있는데 marker를 지우지 않습니다.
 - 디스크 full/crash 때 마지막 journal 행이 잘릴 수 있습니다. `finished` 및 완료 route가 없는 journal은 incomplete입니다. 자동으로 완료 route로 복구하지 않습니다.
 - 증거에는 앱 화면/UI tree/공개 QA 입력이 들어갑니다. 테스트 앱 외 foreground로 바뀌면 다음 작업을 중단하지만 순간적인 외부 전환의 모든 픽셀 노출을 차단하는 제품은 아닙니다. 이 테스트 동안 다른 앱을 사용하지 마세요.

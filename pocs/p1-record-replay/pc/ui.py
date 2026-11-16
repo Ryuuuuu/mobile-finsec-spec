@@ -10,7 +10,7 @@ class Window:
     def __init__(self,root,args):
         self.root=root; self.args=args; self.tasks=queue.Queue(); self.answers=queue.Queue()
         self.busy=False; self.closing=False; self.connected=False; self.frame=None; self.image=None; self.start_point=None
-        self.adapter=Appium(args.device,args.package,args.server); self.engine=Engine(self.adapter,args.output,args.allow_coordinates)
+        self.adapter=Appium(args.device,args.package,args.server,session_create_timeout=args.session_create_timeout); self.engine=Engine(self.adapter,args.output,args.allow_coordinates)
         self.lease=Lease(args.device)
         root.title('Finsec P1 · SYNTHETIC INPUT ONLY'); root.geometry('1050x820')
         controls=ttk.Frame(root,padding=10); controls.pack(side='right',fill='y')
@@ -204,6 +204,9 @@ def main():
     parser=argparse.ArgumentParser(description='Synthetic Appium PC recorder; no physical touch capture')
     parser.add_argument('--device',required=True); parser.add_argument('--package',required=True,choices=[p.PACKAGE])
     parser.add_argument('--server',default='http://127.0.0.1:4723'); parser.add_argument('--output',default='outputs')
+    parser.add_argument('--session-create-timeout',type=int,default=90,metavar='SECONDS',help='Session creation transport timeout, 30-300 seconds (default: 90); ordinary requests remain 20 seconds')
     parser.add_argument('--allow-coordinates',action='store_true',help='Enable at most three exact-geometry coordinate actions; only on visibly observed frames')
-    args=parser.parse_args(); root=tk.Tk(); Window(root,args); root.mainloop()
+    args=parser.parse_args()
+    if not 30<=args.session_create_timeout<=300: parser.error('--session-create-timeout must be from 30 to 300 seconds')
+    root=tk.Tk(); Window(root,args); root.mainloop()
 if __name__=='__main__':main()

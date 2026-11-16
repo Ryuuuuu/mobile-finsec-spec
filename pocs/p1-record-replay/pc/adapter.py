@@ -5,17 +5,22 @@ ELEMENT='element-6066-11e4-a52e-4f735466cecf'
 class Uncertain(RuntimeError): pass
 
 class Appium:
-    def __init__(self,device,package,url='http://127.0.0.1:4723'):
+    def __init__(self,device,package,url='http://127.0.0.1:4723',*,session_create_timeout=90):
         if not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',device): raise ValueError('Explicit valid device serial required')
         if package!=PACKAGE: raise ValueError('Only synthetic package supported')
         u=urllib.parse.urlparse(url)
         if u.scheme!='http' or u.hostname not in ['127.0.0.1','localhost'] or u.path not in ['', '/'] or u.username or u.query or u.fragment: raise ValueError('Appium must be local')
+        if type(session_create_timeout) is not int or not 30<=session_create_timeout<=300: raise ValueError('Session creation timeout must be an integer from 30 to 300 seconds')
         self.device=device; self.package=package; self.url=url.rstrip('/'); self.session=None; self.uncertain=False
+        self.session_create_timeout=session_create_timeout
     def request(self,method,path,data=None):
         req=urllib.request.Request(self.url+path,data=None if data is None else json.dumps(data).encode(),headers={'Content-Type':'application/json'},method=method)
+        # Creating a session includes helper setup and instrumentation startup.
+        # Keep ordinary input/observation/DELETE requests on the shorter budget.
+        timeout=self.session_create_timeout if (method,path)==('POST','/session') else 20
         try:
             # Ignore ambient proxy configuration for the local automation server.
-            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=20) as r: value=json.load(r).get('value')
+            with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=timeout) as r: value=json.load(r).get('value')
         except urllib.error.HTTPError as e:
             raise RuntimeError('Appium HTTP %s: %s'%(e.code,e.read(2048).decode(errors='replace'))) from e
         except (TimeoutError,OSError,ValueError) as e:

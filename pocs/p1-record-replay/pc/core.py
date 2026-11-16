@@ -11,14 +11,26 @@ def atomic(path,data):
 
 class Lease:
     """Cross-process OS lock plus persistent uncertainty quarantine. Never auto-cleared."""
+    @staticmethod
+    def permission_error(path):
+        return RuntimeError('Cannot access device lease: '+str(path)+'. Run all recorder processes under the same Windows user and check that user\'s folder permissions. Do not delete markers or use another lock directory to bypass this error.')
     def __init__(self,device):
-        root=pathlib.Path.home()/'.mobile-finsec-poc'; root.mkdir(exist_ok=True)
+        root=pathlib.Path.home()/'.mobile-finsec-poc'
+        try: root.mkdir(exist_ok=True)
+        except PermissionError as e: raise self.permission_error(root) from e
         self.path=root/(hashlib.sha256(device.encode()).hexdigest()+'.lock'); self.handle=None
         self.quarantine=self.path.with_suffix('.quarantine'); self.active=self.path.with_suffix('.active')
     def acquire(self):
-        if self.quarantine.exists() or self.active.exists(): raise RuntimeError('Device busy or recovery required: confirm Appium stopped before clearing markers: '+str(self.path.parent))
-        self.handle=self.path.open('a+b'); self.handle.seek(0)
-        if self.path.stat().st_size==0: self.handle.write(b'0'); self.handle.flush(); self.handle.seek(0)
+        try:
+            if self.quarantine.exists() or self.active.exists(): raise RuntimeError('Device busy or recovery required: confirm Appium stopped before clearing markers: '+str(self.path.parent))
+        except PermissionError as e: raise self.permission_error(self.path.parent) from e
+        try:
+            self.handle=self.path.open('a+b'); self.handle.seek(0)
+            if self.path.stat().st_size==0: self.handle.write(b'0'); self.handle.flush(); self.handle.seek(0)
+        except OSError as e:
+            if self.handle: self.handle.close(); self.handle=None
+            if isinstance(e,PermissionError): raise self.permission_error(self.path) from e
+            raise
         try:
             if os.name=='nt':
                 import msvcrt; msvcrt.locking(self.handle.fileno(),msvcrt.LK_NBLCK,1)
@@ -26,8 +38,13 @@ class Lease:
                 import fcntl; fcntl.flock(self.handle,fcntl.LOCK_EX|fcntl.LOCK_NB)
         except OSError:
             self.handle.close(); self.handle=None; raise RuntimeError('Device busy in another process')
-        if self.quarantine.exists() or self.active.exists(): self.release(); raise RuntimeError('Device requires recovery')
-        atomic(self.active,{'pid':os.getpid(),'device':self.path.stem,'status':'active_or_unclean_exit'})
+        try:
+            if self.quarantine.exists() or self.active.exists(): self.release(); raise RuntimeError('Device requires recovery')
+            atomic(self.active,{'pid':os.getpid(),'device':self.path.stem,'status':'active_or_unclean_exit'})
+        except OSError as e:
+            self.release() # Preserve any markers; do not leak the OS lock on failed setup.
+            if isinstance(e,PermissionError): raise self.permission_error(self.active) from e
+            raise
     def poison(self,reason): atomic(self.quarantine,{'reason':reason,'time':datetime.datetime.now(datetime.timezone.utc).isoformat()})
     def release(self,clean=False):
         if self.handle:
