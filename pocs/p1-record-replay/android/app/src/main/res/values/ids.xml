@@ -1,0 +1,7 @@
+<resources>
+ <item type="id" name="screen_state"/><item type="id" name="username"/><item type="id" name="password"/>
+ <item type="id" name="login"/><item type="id" name="transfer"/><item type="id" name="recipient"/>
+ <item type="id" name="amount"/><item type="id" name="review"/><item type="id" name="confirm"/>
+ <item type="id" name="receipt"/><item type="id" name="reset"/><item type="id" name="secure_toggle"/>
+ <item type="id" name="secure_state"/><item type="id" name="initial_state"/>
+</resources>

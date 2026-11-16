@@ -1,0 +1,143 @@
+{
+  "schema_version": 1,
+  "recording_id": "SCHEMA-EXAMPLE-NOT-A-REAL-RECORDING",
+  "status": "completed",
+  "device_id": "EXAMPLE-NOT-REAL-DEVICE",
+  "package_id": "dev.finsec.poc",
+  "target": {
+    "version_code": "1",
+    "version_name": "1.0",
+    "apk_sha256": "0000000000000000000000000000000000000000000000000000000000000000"
+  },
+  "initial": {
+    "id": "dev.finsec.poc:id/initial_state",
+    "text": "reset:0::"
+  },
+  "secure": "secure:off",
+  "network_coverage": "none",
+  "actions": [
+    {
+      "action_id": "EXAMPLE-1",
+      "action": {
+        "type": "text",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/username",
+          "text": "qa-user"
+        },
+        "locator": "dev.finsec.poc:id/username",
+        "text": "qa-user"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-2",
+      "action": {
+        "type": "text",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/password",
+          "text": "qa-pass"
+        },
+        "locator": "dev.finsec.poc:id/password",
+        "text": "qa-pass"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-3",
+      "action": {
+        "type": "tap",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/screen_state",
+          "text": "menu"
+        },
+        "locator": "dev.finsec.poc:id/login"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-4",
+      "action": {
+        "type": "tap",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/screen_state",
+          "text": "transfer"
+        },
+        "locator": "dev.finsec.poc:id/transfer"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-5",
+      "action": {
+        "type": "text",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/recipient",
+          "text": "DEMO-001"
+        },
+        "locator": "dev.finsec.poc:id/recipient",
+        "text": "DEMO-001"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-6",
+      "action": {
+        "type": "text",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/amount",
+          "text": "1000"
+        },
+        "locator": "dev.finsec.poc:id/amount",
+        "text": "1000"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-7",
+      "action": {
+        "type": "tap",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/screen_state",
+          "text": "review"
+        },
+        "locator": "dev.finsec.poc:id/review"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-8",
+      "action": {
+        "type": "back",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/screen_state",
+          "text": "transfer"
+        }
+      }
+    },
+    {
+      "action_id": "EXAMPLE-9",
+      "action": {
+        "type": "tap",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/screen_state",
+          "text": "review"
+        },
+        "locator": "dev.finsec.poc:id/review"
+      }
+    },
+    {
+      "action_id": "EXAMPLE-10",
+      "action": {
+        "type": "tap",
+        "timeout": 5,
+        "post": {
+          "id": "dev.finsec.poc:id/receipt",
+          "text": "SIMULATED:1:DEMO-001:1000"
+        },
+        "locator": "dev.finsec.poc:id/confirm"
+      }
+    }
+  ]
+}
