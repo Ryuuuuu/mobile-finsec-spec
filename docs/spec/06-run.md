@@ -34,7 +34,7 @@ RECORD와 SCAN은 동시에 시작하지 않는다. run 시작은 기록 종료�
 
 run plan에는 selected checks/variants, Skill 및 config hash, provider/model 정보, device/app/artifact snapshot, route/packet 범위와 coverage, 요구 capability를 저장한다. 실행 중 설정 변경은 기존 run에 영향을 주지 않는다.
 
-명령에 command ID를 사용한다. 동일 START ID 반복은 같은 run ID를 반환한다. 다른 START ID라도 device busy이면 거부한다. STOP 반복은 같은 취소 요청 상태를 반환한다.
+명령에 command ID를 사용한다. 동일 START ID 반복은 같은 run ID를 반환한다. 다른 START ID라도 device busy이면 실행을 거부한다. 형식 검증 후 run ID가 이미 발급되었다면 busy 사유로 선택 항목을 not_run으로 최종화한다. STOP 반복은 같은 취소 요청 상태를 반환한다.
 
 이벤트에는 event ID, run/check/tool-call ID, sequence, timestamp, source, type, payload를 둔다. UI 재연결은 마지막 seq 이후 replay 또는 snapshot으로 복구한다. UI는 이벤트의 run ID를 확인하고 다른 이력 화면을 덮어쓰지 않는다.
 
