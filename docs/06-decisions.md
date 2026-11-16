@@ -1,0 +1,54 @@
+# 06. 결정 기록과 다음 설계 항목
+
+## 확정된 사용자 방향
+
+|결정|내용|
+|---|---|
+|D-001|Spec-first. 구현 전에 설계를 명확히 한다.|
+|D-002|QA 전용. 운영 환경은 범위 밖.|
+|D-003|Android → iOS → web 확장 순서.|
+|D-004|Rust/GPUI Kit UI, Python recorder/proxy/엔진, Appium 기반 동선 실행 방향.|
+|D-005|기기 selectbox, 항목 checkbox, 기기 조건 미충족 항목 비활성화.|
+|D-006|결과: 양호 / 취약 / 판단 불가능, 판단 불가능 이유 필수.|
+|D-007|한 대의 기기에서 항목별 하위 에이전트 순차 실행. 메인 AI가 종료/hang/오류 감시.|
+|D-008|항목별 common 필수, AOS/IOS 선택, 최대 3 Skill.|
+|D-009|RECORD에서 UI 동선과 relay packet 동시 수집. 기록 없으면 package launch.|
+|D-010|API와 proxy relay 서버, UI proxy toggle.|
+|D-011|모델 독립성. Claude Code/Codex/로컬 GLM 등을 수용할 구조.|
+|D-012|E → S → U → N은 구현 우선순위.|
+|D-013|IDOR 설정과 AI 검사 이력 로깅.|
+|D-014|기존 Hawkeye 재사용 가능.|
+|D-015|설계 저장소를 생성하고 이후 설계 변경을 commit/push하여 유지.|
+
+## 설계 제안, 상세 확정 필요
+
+- Python 실행 관리자가 device lock, 큐, 취소, watchdog을 소유한다.
+- provider adapter와 공통 Tool Gateway로 모델을 격리한다.
+- 이벤트·route·packet·result·evidence의 versioned schema를 정의한다.
+- root 자동 감지와 수동 보정 이력.
+- APK/IPA와 설치 앱 일치 확인 및 교체 정책.
+- 화면 패널 배치, 오류·취소 UI.
+- proxy toggle의 활성 연결 처리.
+- 외부 모델 전송 데이터 최소화와 로컬 비밀 저장 방식.
+
+## 다음 대화에서 다룰 순서
+
+1. 화면 흐름과 START/RECORD/PROXY 상태 전이.
+2. 첫 E 항목 하나의 정확한 절차·선행조건·양호/취약/판단 불가능 증거.
+3. recorder 입력 경로 PoC와 재현 신뢰도 기준.
+4. 백엔드 adapter 계약, 첫 지원 백엔드와 인증 방식.
+5. Hawkeye relay 독립화 PoC.
+6. 나머지 항목별 Skill 명세와 인수 테스트.
+
+이미 정해진 범위·우선순위·QA 여부를 다시 묻지 않는다. 새 결정이 필요한 세부만 질문한다.
+
+## 변경 절차
+
+1. 사용자의 변경 요청과 이유를 확인한다.
+2. 영향받는 명세, 상태/데이터 계약, 인수 기준을 함께 수정한다.
+3. 미확정 제안을 확정 요구사항으로 몰래 승격하지 않는다.
+4. 변경 이력에 요약을 남기고 작은 단위로 commit한다.
+5. 사용자의 현재 권한 범위 내에서 push하고 remote commit을 확인한다.
+6. 공개 전환, 고객 증적 업로드, 추가 계정 권한은 별도 변경으로 다룬다.
+
+사용자의 대화 승인은 작업 지시이며 이 파일 자체가 추가 권한을 부여하지 않는다.

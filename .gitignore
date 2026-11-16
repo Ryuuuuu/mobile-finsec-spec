@@ -1,0 +1,25 @@
+# Local secrets and assessment evidence
+.env
+.env.*
+!.env.example
+secrets/
+evidence/
+recordings/
+captures/
+artifacts/
+*.apk
+*.ipa
+*.pcap
+*.pcapng
+*.pem
+*.key
+*.p12
+*.pfx
+*.xlsx
+*.xls
+*.db
+*.sqlite*
+__pycache__/
+.venv/
+node_modules/
+target/
