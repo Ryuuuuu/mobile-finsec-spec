@@ -1,5 +1,5 @@
 """Desktop-owned input only. One worker serializes all Appium calls."""
-import argparse, base64, math, pathlib, queue, re, struct, threading, time, tkinter as tk
+import argparse, base64, math, pathlib, queue, re, struct, subprocess, sys, threading, time, tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import xml.etree.ElementTree as ET
 from .adapter import Appium, Uncertain, TargetNotForeground
@@ -34,6 +34,8 @@ class Window:
         self.preview_status=tk.StringVar(value='Preview disconnected. Connect to view the selected app.')
         ttk.Label(controls,text=args.device+'\n'+args.package).pack(anchor='w')
         self.replay_disabled=[]
+        self.observer_process=None
+        ttk.Button(controls,text='Independent read-only observation',command=self.observe_device).pack(fill='x')
         if self.generic:ttk.Button(controls,text='Launch selected app (no session)',command=self.launch).pack(fill='x')
         for label,fn in [('Connect (no reset)',self.connect),('RESET fixture (outside recording)',lambda:self.maintenance('reset')),('Toggle FLAG_SECURE (outside recording)',lambda:self.maintenance('secure_toggle')),('RECORD',self.record),('STOP recording',self.stop),('Replay JSON',self.replay),('Cancel run',self.cancel)]:
             if self.generic and (label.startswith('RESET') or label.startswith('Toggle')):continue
@@ -60,6 +62,15 @@ class Window:
         self.canvas.bind('<ButtonPress-1>',self.press); self.canvas.bind('<ButtonRelease-1>',self.release)
         root.protocol('WM_DELETE_WINDOW',self.close)
         threading.Thread(target=self.worker,daemon=True).start(); root.after(50,self.drain); root.after(800,self.poll)
+    def observe_device(self):
+        if self.observer_process and self.observer_process.poll() is None:
+            self.status.set('Independent observer already open');return
+        command=[sys.executable,'-m','pc.observe','--device',self.args.device,'--package',self.args.package]
+        if getattr(self.args,'scrcpy',None):command.extend(['--scrcpy',self.args.scrcpy])
+        try:
+            self.observer_process=subprocess.Popen(command,cwd=pathlib.Path(__file__).resolve().parent.parent)
+            self.status.set('Observer opens separately; its clicks are NOT recorded. Close its own window to stop it.')
+        except OSError as e:self.status.set('Observer could not start: '+str(e))
     def clear_preview(self,reason):
         # Invalidate both pixels and their input mapping; never leave stale input targets.
         self.frame=None; self.image=None; self.start_point=None; self.visible.set(False)
@@ -313,6 +324,7 @@ def main():
     parser.add_argument('--server',default='http://127.0.0.1:4723'); parser.add_argument('--output',default='outputs')
     parser.add_argument('--session-create-timeout',type=int,default=90,metavar='SECONDS',help='Session creation transport timeout, 30-300 seconds (default: 90); ordinary requests remain 20 seconds')
     parser.add_argument('--allow-coordinates',action='store_true',help='Enable at most three exact-geometry coordinate actions; only on visibly observed frames')
+    parser.add_argument('--scrcpy',help='Official scrcpy executable for independent read-only observation')
     parser.add_argument('--launch-only',action='store_true',help='Resolve and start launcher via ADB; no Appium session or screenshots')
     parser.add_argument('--list-apps',action='store_true',help='List installed user-app package IDs via ADB; no session')
     args=parser.parse_args()

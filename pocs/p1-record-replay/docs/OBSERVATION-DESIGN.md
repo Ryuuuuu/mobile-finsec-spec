@@ -1,6 +1,44 @@
 # Proposal: independent device observation and guarded app input
 
-Status: design proposal, not an implemented scrcpy integration. Current P1 preview is an Appium screenshot/source poll guarded by selected-package foreground checks. It cannot show the launcher before the target opens or what replaces it after exit. This is appropriate for preventing input into another app, but insufficient for diagnosing lifecycle transitions. Removing the input foreground guard is not the solution.
+Status: first-stage external read-only viewer implemented in `pc.observe`, accessible through P1's **Independent read-only observation** button. The original P1 input preview remains an Appium screenshot/source poll guarded by selected-package foreground checks. It cannot show the launcher before the target opens or what replaces it after exit; the independent viewer handles that observation. Input foreground guards remain unchanged.
+
+## Run the first-stage implementation
+
+Install the official Windows release following [upstream instructions](https://github.com/Genymobile/scrcpy/blob/master/doc/windows.md), verify its published SHA-256, and use its executable path. Tested distribution: scrcpy 5.0.1 win64 ZIP, SHA-256 `b12a2c4ee8be317422451fc7dcf8ee20a71b5ea7ef9ad73ddd825a25316227a5`; `scrcpy --version` matched 5.0.1. No third-party repackaging or binary is committed here.
+
+From the P1 directory with the project venv:
+
+```powershell
+python -m pc.observe --device YOUR_SERIAL --package dev.finsec.qa.standalone --scrcpy C:\Tools\scrcpy\scrcpy.exe --adb C:\Android\platform-tools\adb.exe
+# Alternatively add --scrcpy PATH when launching python -m pc.ui,
+# then choose Independent read-only observation.
+```
+
+An explicit whole-device display notice appears before starting. The viewer runs without Appium, with `--no-control --no-audio`, no recording flag, and the configured ADB binary. A separate observation panel shows sampled target process count, foreground yes/no/unknown, observation age and a bounded in-memory timeline. Unrelated package names and raw ADB output are not displayed or saved. Hide/stop kills only the owned scrcpy process; restart is manual. Closing this panel stops its viewer. Closing P1 input leaves the independently opened panel alive; the user must close it separately.
+
+**The scrcpy screen is observation-only: clicking it neither operates the phone nor records a route.** Recorded input still uses the original P1 canvas and its guarded Appium session. Direct operation plus recording on the continuous mirror remains unimplemented.
+
+The external viewer does not report decoded-frame timestamps to Python: its process-alive state is explicitly labeled **pixel freshness unknown**. Observation age describes ADB samples, not video freshness. PID changes are observations, not durable process identities or proven crashes; PID reuse/short events can be missed. Historical exit-reason collection, crash fixtures, integrated stale-frame overlays, WebView/Compose and reconnect testing remain follow-up work. No security-detection conclusion is generated.
+
+## Device validation of this stage
+
+On the authorized Android device, with only the two disposable QA apps:
+
+- Before the selected native app was launched, the external viewer displayed the other Canvas QA app; target observation reported zero processes and not foreground.
+- Launching native QA updated the same viewer to its native widgets and the observer to one process/foreground. A click on the read-only Canvas view did not advance its state.
+- Controlled target force-stop left the viewer displaying the other QA app and target observation returned to zero/not foreground. Back in this fixture resets local state rather than exiting, so it was not counted as normal-exit acceptance.
+- An authorized Appium session opened while the viewer remained visible. After session DELETE and shutdown of the owned Appium server, switching from native to Canvas produced a fresh visible screen in the same scrcpy window. This verifies continued display, not merely a surviving process.
+- Hide/stop and manual restart worked. Closing the independent observation panel removed its owned scrcpy window. No recording was enabled and no real banking screen was used.
+
+The user explicitly requested retention of the approved test-device settings after this run. Final readback was hidden API policies `1/1/1` and helper mock location `allow`; this run did **not** restore the earlier baseline. That local test instruction is not a new default policy for P1 or other users. The standard adapter still restores its recorded session baseline. Actual device identifiers and diagnostic evidence are excluded from this repository.
+
+## Prepared-device handling versus per-app permission
+
+Viewing through scrcpy required neither an Appium session nor the hidden API/mock-location changes. Those changes are device/helper state, not permissions granted independently to every tested target app.
+
+Source review of the installed UiAutomator2 **6.0.0** found that `performSessionPreExecSetup` calls `setHiddenApiPolicy('1', ...)` for API 28+, independently of `skipDeviceInitialization`; session deletion calls `setDefaultHiddenApiPolicy`. `ignoreHiddenApiPolicyError` only changes error handling, not whether a write is attempted. `skipServerInstallation` skips helper installation checks, not the hidden API policy operation. Thus these flags alone do not establish a no-settings-write session in the tested version. No patched driver or unverified skip configuration was substituted.
+
+A subsequent prepared-device workflow should probe driver/helper versions, installed APK identity and current policy/appops values before session creation. Show only the required changes against the selected device's approved baseline, retain approval for the explicitly authorized device/test scope, and avoid creating a new session merely for read-only viewing. Switching target apps within one long-lived session requires a separately validated target/build rebind and journal boundary; current P1 still binds one session to one target. A no-write connection mode must be demonstrated against the pinned driver's startup and teardown paths before being advertised. Never silently broaden approval to another device or permission.
 
 ## Separate three lifecycles
 
