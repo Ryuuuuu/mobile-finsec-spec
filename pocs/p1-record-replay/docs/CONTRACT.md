@@ -1,5 +1,7 @@
 # v1 계약과 구현 경계
 
+> Selected installed-app mode (v2) is now available: [setup, safety boundaries and validation](SELECTED-APPS.md). Synthetic-only statements below describe the original v1 fixture workflow.
+
 `pc/protocol.py`가 실행에 사용하는 권위 있는 엄격 validator입니다. `tap`, `swipe`, `text`, `back`, `wait`만 허용합니다. script/shell/launch URI/임의 execute endpoint는 route에서 제공할 수 없습니다. unknown field, unknown version, 중복 action ID/JSON key, 1 MiB 초과 route, 100단계 초과, 비유한 timeout, 임의 패키지/resource ID/비공개 text를 거부합니다.
 
 route: schema_version, recording_id, status(completed만 재생), device_id, package_id, target(version_code/version_name/apk_sha256), initial, secure, network_coverage(none), actions[]. 각 step은 action_id와 action을 갖습니다. action에는 type, timeout(1~15초), post{id,text?}, 유형별 locator/point/end/geometry/text가 있습니다. point/end는 [0,1) 정규화 좌표입니다. 예제는 `examples/route.schema-example.json`; 이것은 실제 기록/실기기 성공 증거가 아니라 validator 통과용 합성 데이터입니다.

@@ -1,5 +1,7 @@
 # Windows 실행 안내
 
+> Selected installed-app mode (v2) is now available: [setup, safety boundaries and validation](SELECTED-APPS.md). Synthetic-only statements below describe the original v1 fixture workflow.
+
 이 안내는 Git 저장소 또는 소스 ZIP으로 받은 독립 P1 PoC에 적용됩니다. 자동으로 사용자 PC나 기기에 연결되지 않습니다. 지금 제공된 자동 테스트 결과는 Linux 클라우드 결과이며 Windows/실기기 결과가 아닙니다. 실제 금융 앱은 지원하지 않고 `dev.finsec.poc`만 허용합니다.
 
 ## 준비

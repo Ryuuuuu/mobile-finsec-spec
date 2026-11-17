@@ -1,5 +1,7 @@
 # P1 검증 보고서
 
+> Selected installed-app mode (v2) is now available: [setup, safety boundaries and validation](SELECTED-APPS.md). Synthetic-only statements below describe the original v1 fixture workflow.
+
 ## 후속 Windows 실기기 GUI 녹화·재생 검증
 
 Windows/Python 3.12, Android 실기기, Appium 3.1.0/UiAutomator2 6.0.0에서 화면 조회와 입력 경쟁을 수정한 로컬 작업본으로 아래 시험을 완료했습니다. 아래 최초 보고서는 당시 기록으로 보존합니다.

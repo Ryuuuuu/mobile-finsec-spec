@@ -1,5 +1,7 @@
 # Mobile Finsec P1 — independent synthetic PoC
 
+> Selected installed-app mode (v2) is now available: [setup, safety boundaries and validation](docs/SELECTED-APPS.md). Synthetic-only statements below describe the original v1 fixture workflow.
+
 Android 합성 로그인 → 메뉴 → 모의 이체 → 확인 앱과 **PC UI에서 받은 입력만** 기록하고 Appium으로 재생하는 독립 프로그램입니다. 실제 금융 서버/계정/거래, proxy, AI, 보안 판정을 포함하지 않습니다. 실제 단말의 손터치 자동 녹화가 아닙니다.
 
 - 먼저 [한 장 실행 명세](docs/EXECUTION-SPEC.md)

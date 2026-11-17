@@ -13,26 +13,29 @@ class Window:
         self.closing=False; self.connected=False; self.frame=None; self.image=None; self.start_point=None
         self.adapter=Appium(args.device,args.package,args.server,session_create_timeout=args.session_create_timeout); self.engine=Engine(self.adapter,args.output,args.allow_coordinates)
         self.lease=Lease(args.device)
-        root.title('Finsec P1 · SYNTHETIC INPUT ONLY'); root.geometry('1050x820')
+        self.generic=args.package!=p.PACKAGE
+        root.title('Finsec P1 · SELECTED APP QA'); root.geometry('1050x820')
         controls=ttk.Frame(root,padding=10); controls.pack(side='right',fill='y')
         self.status=tk.StringVar(value='Disconnected. User PC/physical touches are not recorded.')
-        self.preview_status=tk.StringVar(value='Preview disconnected. Connect to view the synthetic app.')
+        self.preview_status=tk.StringVar(value='Preview disconnected. Connect to view the selected app.')
         ttk.Label(controls,text=args.device+'\n'+args.package).pack(anchor='w')
         self.replay_disabled=[]
+        if self.generic:ttk.Button(controls,text='Launch selected app (no session)',command=self.launch).pack(fill='x')
         for label,fn in [('Connect (no reset)',self.connect),('RESET fixture (outside recording)',lambda:self.maintenance('reset')),('Toggle FLAG_SECURE (outside recording)',lambda:self.maintenance('secure_toggle')),('RECORD',self.record),('STOP recording',self.stop),('Replay JSON',self.replay),('Cancel run',self.cancel)]:
+            if self.generic and (label.startswith('RESET') or label.startswith('Toggle')):continue
             button=ttk.Button(controls,text=label,command=fn); button.pack(fill='x',pady=3)
             if label!='Cancel run': self.replay_disabled.append(button)
         ttk.Separator(controls).pack(fill='x',pady=10)
-        ttk.Label(controls,text='Explicit postcondition (required)').pack(anchor='w')
-        self.postid=tk.StringVar(value='screen_state'); self.posttext=tk.StringVar(value='menu')
-        ttk.Combobox(controls,textvariable=self.postid,values=sorted(p.IDS),state='readonly').pack(fill='x')
+        ttk.Label(controls,text='Initial at RECORD / next action postcondition').pack(anchor='w')
+        self.postid=tk.StringVar(value='' if self.generic else 'screen_state'); self.posttext=tk.StringVar(value='' if self.generic else 'menu')
+        self.post_selector=ttk.Combobox(controls,textvariable=self.postid,values=[] if self.generic else sorted(p.IDS),state='normal' if self.generic else 'readonly');self.post_selector.pack(fill='x')
         ttk.Entry(controls,textvariable=self.posttext).pack(fill='x')
         ttk.Label(controls,text='Exact text; blank = existence only').pack(anchor='w')
         ttk.Label(controls,text='Text target resource ID').pack(anchor='w',pady=(12,0))
-        self.textid=tk.StringVar(value='username'); self.literal=tk.StringVar(value='qa-user')
-        ttk.Combobox(controls,textvariable=self.textid,values=['username','password','recipient','amount'],state='readonly').pack(fill='x')
-        ttk.Combobox(controls,textvariable=self.literal,values=sorted(p.PUBLIC_TEXT),state='readonly').pack(fill='x')
-        for label,fn in [('Send public fixture text',self.text_input),('Back',lambda:self.input({'type':'back'})),('Wait for condition',lambda:self.input({'type':'wait'}))]:
+        self.textid=tk.StringVar(value='' if self.generic else 'username'); self.literal=tk.StringVar(value='' if self.generic else 'qa-user')
+        self.text_selector=ttk.Combobox(controls,textvariable=self.textid,values=[] if self.generic else ['username','password','recipient','amount'],state='normal' if self.generic else 'readonly');self.text_selector.pack(fill='x')
+        ttk.Combobox(controls,textvariable=self.literal,values=[] if self.generic else sorted(p.PUBLIC_TEXT),state='normal' if self.generic else 'readonly').pack(fill='x')
+        for label,fn in [('Send non-secret test text',self.text_input),('Back',lambda:self.input({'type':'back'})),('Wait for condition',lambda:self.input({'type':'wait'}))]:
             button=ttk.Button(controls,text=label,command=fn); button.pack(fill='x',pady=3); self.replay_disabled.append(button)
         self.visible=tk.BooleanVar(value=False)
         ttk.Checkbutton(controls,text='I can see this frame clearly\n(required for coordinate input)',variable=self.visible).pack(anchor='w',pady=10)
@@ -69,7 +72,7 @@ class Window:
                 was_observing=self.observing; self.observing=False
                 pending=self.pending_input; self.pending_input=None
                 if error:
-                    reason=('Preview paused: target app is not foreground. Return to '+p.PACKAGE+'.'
+                    reason=('Preview paused: target app is not foreground. Return to '+getattr(getattr(self,'args',None),'package',p.PACKAGE)+'.'
                             if isinstance(error,TargetNotForeground) else 'Preview unavailable: '+str(error))
                     self.clear_preview(reason)
                     self.status.set(type(error).__name__+': '+str(error))
@@ -93,8 +96,30 @@ class Window:
                 if hasattr(self.engine,'record'):
                     self.engine.record['status']='incomplete'; atomic(self.engine.j.path/'route.json',self.engine.record)
             except OSError: pass
+    def launch(self):
+        if self.engine.mode!='idle':self.status.set('Launch blocked during active or partial run');return
+        if not messagebox.askyesno('Launch selected app',self.adapter.package+' will open without reset. Continue?'):return
+        def work():
+            if self.connected:return self.adapter.launch()
+            self.lease.acquire()
+            try:return self.adapter.launch()
+            finally:self.lease.release(clean=True)
+        self.submit(work,lambda v:self.status.set(v))
+    def resource_id(self,value):
+        return value if self.adapter.package!=p.PACKAGE else p.PREFIX+value
     def connect(self):
         if self.connected: self.status.set('Already connected'); return
+        if self.adapter.package!=p.PACKAGE and not getattr(self.adapter,'security_approved',False):
+            def reviewed(report):
+                warning='Target: '+report['package']+'\nLauncher: '+report['launcher']+'\nApp data will not be reset. Preview reads screen/XML in memory; routes store text and IDs locally. Use only authorized non-sensitive QA.\n\nAppium may install helpers, change three hidden API policies and allow helper mock location. These settings will be restored and verified on close. Do you approve these temporary changes and preview access?'
+                if messagebox.askyesno('Review session effects',warning):
+                    try:
+                        folder=pathlib.Path(self.args.output);folder.mkdir(parents=True,exist_ok=True)
+                        self.baseline_path=folder/('security-baseline-'+str(time.time_ns())+'.json')
+                        atomic(self.baseline_path,report)
+                        self.adapter.approve_security(report);self.connect()
+                    except Exception as e:self.status.set('Preflight blocked: '+str(e))
+            self.submit(self.adapter.preflight,reviewed); return
         self.clear_preview('Connecting; waiting for a fresh frame.')
         def work():
             self.lease.acquire()
@@ -104,13 +129,14 @@ class Window:
                 except Exception: self.lease.poison('Session cleanup failed')
                 if self.adapter.uncertain: self.lease.poison('Session creation outcome unknown')
                 self.lease.release(clean=not self.adapter.uncertain and not self.adapter.session); raise
-        def done(_): self.connected=True; self.status.set('Connected. Open '+p.PACKAGE+' to view it. Build hash verified; reset remains explicit.')
+        def done(_): self.connected=True; self.status.set('Connected. Open '+self.adapter.package+' to view it. Build hash verified; reset remains explicit.')
         self.submit(work,done)
     def ready(self):
         if not self.connected: self.status.set('Connect selected device first'); return False
         if self.busy and (not self.observing or self.pending_input is not None): self.status.set('Busy; duplicate operation rejected'); return False
         return True
     def maintenance(self,name):
+        if self.adapter.package!=p.PACKAGE: self.status.set('Fixture maintenance unavailable for selected app'); return
         if not self.ready(): return
         if self.engine.mode!='idle': self.status.set('Maintenance blocked during active/partial run. Reconnect after review.'); return
         def work():
@@ -120,6 +146,10 @@ class Window:
             j.write('intent',operation=name); self.adapter.click(elements[0]); j.write('result',status='dispatch_acknowledged')
         self.submit(work,lambda _:self.status.set('Maintenance dispatched; initial state will be checked before record/replay.'))
     def record(self):
+        if self.adapter.package!=p.PACKAGE:
+            try:
+                self.engine.initial_condition=self.post(); p.condition(self.engine.initial_condition,self.adapter.package)
+            except ValueError as e:self.status.set(str(e));return
         if self.ready(): self.submit(self.engine.start,lambda _:self.status.set('Recording · '+str(self.engine.j.path)))
     def stop(self):
         if self.engine.mode!='recording': self.status.set('No active recording'); return
@@ -133,7 +163,7 @@ class Window:
             self.engine.stop_requested(); self.status.set('Cancellation requested; waiting for finite transport completion')
             if not self.busy: self.abort('User cancelled recording')
     def post(self):
-        c={'id':p.PREFIX+self.postid.get()}
+        c={'id':self.resource_id(self.postid.get())}
         if self.posttext.get(): c['text']=self.posttext.get()
         return c
     def input(self,a):
@@ -143,9 +173,10 @@ class Window:
         self.submit(lambda:self.engine.record_action(a),lambda _:self.status.set('Recorded step '+str(len(self.engine.steps))))
     def text_input(self):
         name=self.textid.get(); value=self.literal.get()
+        if self.adapter.package!=p.PACKAGE and not messagebox.askyesno('Local plaintext route','This text and postcondition will be stored locally in plaintext. Confirm it is non-secret authorized test data.'):return
         # Text entry postcondition is exact observed public value, independent of screen dropdown.
         if not self.ready() or self.engine.mode!='recording': self.status.set('Text requires active recording'); return
-        a={'type':'text','locator':p.PREFIX+name,'text':value,'timeout':5,'post':{'id':p.PREFIX+name,'text':value}}
+        a={'type':'text','locator':self.resource_id(name),'text':value,'timeout':5,'post':{'id':self.resource_id(name),'text':value}}
         self.submit(lambda:self.engine.record_action(a),lambda _:self.status.set('Recorded text step '+str(len(self.engine.steps))))
     def replay(self):
         if not self.ready() or self.engine.mode!='idle': self.status.set('Replay requires idle connection; review incomplete run first'); return
@@ -153,6 +184,8 @@ class Window:
         if not path:return
         try: route=p.load(path)
         except Exception as e:self.status.set(str(e));return
+        if route['package_id']!=self.adapter.package:self.status.set('Selected package mismatch');return
+        if self.adapter.package!=p.PACKAGE and not messagebox.askyesno('Replay review',str(len(route['actions']))+' actions in '+route['package_id']+'. No automatic reset. Manually restore the recorded initial state. Actions may change app/server data and cannot be undone. Review the local route first. Proceed?'):return
         self.submit(lambda:self.engine.replay(route),lambda result:self.status.set('Replay '+result['status']+' · '+str(self.engine.j.path/'result.json')+' '+result.get('reason','')))
     def poll(self):
         if self.connected and self.visible.get():
@@ -185,6 +218,14 @@ class Window:
             self.canvas.delete('all')
             self.canvas.create_image(cw/2,ch/2,image=self.image)
             self.frame=f
+            if getattr(self,'generic',False):
+                ids=[]
+                for n in ET.fromstring(f.get('xml','<empty/>')).iter():
+                    rid=n.get('resource-id','')
+                    try:p.resource(rid,self.adapter.package)
+                    except ValueError:continue
+                    ids.append(rid)
+                self.post_selector['values']=sorted(set(ids));self.text_selector['values']=sorted(set(ids))
             f['display']=(cw,ch,self.image.width(),self.image.height()); f['pixels']=(iw,ih)
             if f['geometry']['width']!=iw or f['geometry']['height']!=ih:
                 f['mapping_error']='Screenshot/window geometry differs; input blocked'
@@ -222,7 +263,9 @@ class Window:
                 hits=[]; x=start[0]*g['width']; y=start[1]*g['height']
                 for node in ET.fromstring(self.frame.get('xml','<empty/>')).iter():
                     rid=node.get('resource-id',''); b=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',node.get('bounds',''))
-                    if b and rid.startswith(p.PREFIX) and rid[len(p.PREFIX):] in p.IDS:
+                    try:p.resource(rid,self.adapter.package)
+                    except ValueError:continue
+                    if b:
                         l,t,r,bottom=map(int,b.groups())
                         if l<=x<r and t<=y<bottom:hits.append(((r-l)*(bottom-t),rid))
                 if hits:a['locator']=min(hits)[1]
@@ -236,7 +279,10 @@ class Window:
         self.clear_preview('Preview stopped; closing the session.')
         def cleanup():
             self.abort('Window closed')
-            try:self.adapter.close()
+            try:
+                self.adapter.close()
+                if hasattr(self,'baseline_path') and not hasattr(self.adapter,'security_baseline'):
+                    atomic(self.baseline_path.with_suffix('.restored.json'),{'status':'verified','baseline':self.baseline_path.name})
             except Exception as e:self.lease.poison('Cleanup not confirmed: '+str(e))
             if self.adapter.uncertain:self.lease.poison('Transport uncertainty; manually stop Appium before recovery')
             self.lease.release(clean=not self.adapter.uncertain and not self.adapter.session)
@@ -253,12 +299,23 @@ class Window:
         self.root.after(100,drain_close)
 
 def main():
-    parser=argparse.ArgumentParser(description='Synthetic Appium PC recorder; no physical touch capture')
-    parser.add_argument('--device',required=True); parser.add_argument('--package',required=True,choices=[p.PACKAGE])
+    parser=argparse.ArgumentParser(description='Selected installed-app QA recorder; no physical touch capture')
+    parser.add_argument('--device',required=True); parser.add_argument('--package',type=p.package_name)
     parser.add_argument('--server',default='http://127.0.0.1:4723'); parser.add_argument('--output',default='outputs')
     parser.add_argument('--session-create-timeout',type=int,default=90,metavar='SECONDS',help='Session creation transport timeout, 30-300 seconds (default: 90); ordinary requests remain 20 seconds')
     parser.add_argument('--allow-coordinates',action='store_true',help='Enable at most three exact-geometry coordinate actions; only on visibly observed frames')
+    parser.add_argument('--launch-only',action='store_true',help='Resolve and start launcher via ADB; no Appium session or screenshots')
+    parser.add_argument('--list-apps',action='store_true',help='List installed user-app package IDs via ADB; no session')
     args=parser.parse_args()
+    if args.list_apps:
+        a=Appium(args.device,args.package or p.PACKAGE,args.server)
+        print(a.adb('shell','pm','list','packages','-3'));return
+    if not args.package:parser.error('--package is required except with --list-apps')
+    if args.launch_only:
+        lease=Lease(args.device);lease.acquire()
+        try:print(Appium(args.device,args.package,args.server).launch())
+        finally:lease.release(clean=True)
+        return
     if not 30<=args.session_create_timeout<=300: parser.error('--session-create-timeout must be from 30 to 300 seconds')
     root=tk.Tk(); Window(root,args); root.mainloop()
 if __name__=='__main__':main()

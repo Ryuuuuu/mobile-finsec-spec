@@ -65,7 +65,8 @@ class Journal:
             f.write(json.dumps(obj,ensure_ascii=False,allow_nan=False)+'\n'); f.flush(); os.fsync(f.fileno())
 
 class Engine:
-    def __init__(self,adapter,output,allow_coordinates=False):
+    def __init__(self,adapter,output,allow_coordinates=False,initial_condition=None):
+        self.initial_condition=initial_condition; self.fixture=adapter.package==p.PACKAGE
         self.a=adapter; self.output=output; self.allow_coordinates=allow_coordinates; self.mode='idle'
         self.cancel=threading.Event(); self.guard=threading.Lock(); self.steps=[]; self.fallbacks=0; self.j=None
     @contextlib.contextmanager
@@ -83,6 +84,10 @@ class Engine:
             if time.monotonic()>=end: raise TimeoutError('Postcondition/initial-state not observed: '+str(c))
             self.cancel.wait(.15)
     def initial(self):
+        if not self.fixture:
+            p.condition(self.initial_condition,self.a.package)
+            self.condition(self.initial_condition,3)
+            return 'unknown'
         self.a.foreground(); self.condition({'id':p.PREFIX+'initial_state','text':'reset:0::'},3)
         for name in ['username','password']:
             self.condition({'id':p.PREFIX+name,'text':''},3)
@@ -92,6 +97,7 @@ class Engine:
         if secure not in ['secure:on','secure:off']: raise RuntimeError('Unknown secure mode')
         return secure
     def evidence(self,action_id,phase):
+        if not self.fixture:return {'input':'not_probed','hierarchy':'not_saved','screen':'not_saved','refs':{}}
         result={'input':'not_probed','hierarchy':'unavailable','screen':'unavailable','refs':{}}
         for kind,fn,extension in [('hierarchy',self.a.source,'xml'),('screen',self.a.screenshot,'png')]:
             try:
@@ -111,7 +117,7 @@ class Engine:
             self.j=Journal(self.output,'recording')
             try:
                 secure=self.initial(); target=self.a.target()
-                self.record={'schema_version':1,'recording_id':self.j.id,'status':'incomplete','device_id':self.a.device,'package_id':p.PACKAGE,'target':target,'initial':{'id':p.PREFIX+'initial_state','text':'reset:0::'},'secure':secure,'network_coverage':'none','actions':self.steps}
+                self.record={'schema_version':1 if self.fixture else 2,'recording_id':self.j.id,'status':'incomplete','device_id':self.a.device,'package_id':self.a.package,'target':target,'initial':{'id':p.PREFIX+'initial_state','text':'reset:0::'} if self.fixture else copy.deepcopy(self.initial_condition),'secure':secure,'network_coverage':'none','actions':self.steps}
                 self.j.write('ready',target=target,secure=secure,network_coverage='none'); self.mode='recording'
             except Exception as e:
                 self.mode='failed'; self.j.write('failed',reason=str(e)); raise
@@ -130,10 +136,12 @@ class Engine:
             self.fallbacks+=1
         return None
     def execute(self,a,action_id):
-        p.action(a)
+        p.action(a,self.a.package)
         if self.cancel.is_set(): raise InterruptedError('Cancelled before dispatch')
         self.a.foreground(); before=self.evidence(action_id,'before')
         target=self.resolve(a)
+        if not self.fixture and a['type']=='text':self.a.check_text_target(target)
+        self.a.foreground()
         if self.cancel.is_set(): raise InterruptedError('Cancelled before intent')
         self.j.write('intent',action_id=action_id,action=a,before=before) # fsync before any device input
         if self.cancel.is_set(): raise InterruptedError('Cancelled before dispatch')
@@ -182,6 +190,8 @@ class Engine:
             self.j=Journal(self.output,'replay')
             result={'schema_version':1,'run_id':self.j.id,'recording_id':route['recording_id'],'status':'incomplete','steps':[{'action_id':s['action_id'],'status':'not_run'} for s in route['actions']]}
             try:
+                if self.a.package!=route['package_id']: raise RuntimeError('Selected package mismatch')
+                if not self.fixture:self.initial_condition=copy.deepcopy(route['initial'])
                 if self.a.device!=route['device_id']: raise RuntimeError('Explicit recorded device mismatch')
                 if self.a.target()!=route['target']: raise RuntimeError('Installed APK build mismatch')
                 if self.initial()!=route['secure']: raise RuntimeError('Secure mode differs from recording')
