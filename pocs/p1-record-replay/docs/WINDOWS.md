@@ -128,3 +128,15 @@ STOP은 입력을 닫고 완료 route를 저장합니다. 실행 도중 STOP/Can
 위 APK 준비 A 절차를 **PoC 루트**에서 다시 실행합니다. `Push-Location`/`Pop-Location`으로 빌드 후에도 PoC 루트를 유지합니다.
 
 Gradle **8.9**, Android Gradle Plugin **8.7.3**, SDK **35**, Build-Tools **35.0.0**. PoC 루트 기준 `android\app\build\outputs\apk\debug\app-debug.apk`가 생성됩니다. debug 키는 본인 환경에서 생성됩니다. 배포 ZIP에는 개인 키를 포함하지 않습니다. 새 빌드는 서명/해시가 달라 기존 route와 호환되지 않을 수 있으므로 새 기록을 만듭니다. `targetSdk=28`은 이 격리 fixture의 인셋을 단순화하기 위한 선택이며 최신 Android 제품 보안 기준 준수 주장이 아닙니다.
+
+## 미리보기 갱신과 검은 화면 구분
+
+`Connect (no reset)`은 기존 앱 데이터를 초기화하지 않습니다. 이미 실행 중인 앱이 백그라운드에 있으면 자동으로 전면화되지 않을 수 있으므로 `dev.finsec.poc`를 직접 엽니다. P1은 해당 합성 앱이 전면인 동안에만 약 900ms 간격으로 캡처를 요청합니다. 실제 갱신 간격은 Appium 응답 시간에 따라 달라집니다.
+
+- 홈/다른 앱으로 전환: 이전 프레임과 클릭 매핑을 제거하고 `Preview paused: target app is not foreground`를 표시합니다. 일반 앱을 기록하거나 우회 캡처하지 않습니다.
+- 대상 앱으로 복귀: 다음 정상 조회에서 새 프레임과 수신 시각을 표시합니다.
+- 캡처/연결 실패: 이전 이미지를 유지하지 않고 실패 사유를 표시합니다. transport 결과가 불확실하면 기존 복구 절차를 따릅니다.
+- `secure:on`: 합성 앱 UI 계층에서 확인한 FLAG_SECURE 상태입니다. 캡처 API가 PNG를 반환해도 앱 영역은 검게 나올 수 있습니다. 검은 픽셀만으로 원인을 판정하지 않습니다.
+- 좌표 입력용 화면 확인 체크: 의도적으로 프레임 갱신을 멈추며 `Preview held`를 표시합니다. 체크를 해제하면 갱신을 재개합니다.
+
+진단 시에는 동일 시점의 ADB 원본, Appium 원본, P1 수신 시각을 비교합니다. 실기기 식별자·홈 화면·UI XML·로그·APK 해시는 로컬에만 보관합니다.

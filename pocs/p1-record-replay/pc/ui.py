@@ -1,8 +1,8 @@
 """Desktop-owned input only. One worker serializes all Appium calls."""
-import argparse, base64, math, pathlib, queue, re, struct, threading, tkinter as tk
+import argparse, base64, math, pathlib, queue, re, struct, threading, time, tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 import xml.etree.ElementTree as ET
-from .adapter import Appium, Uncertain
+from .adapter import Appium, Uncertain, TargetNotForeground
 from .core import Engine, Lease, Journal, atomic
 from . import protocol as p
 
@@ -15,9 +15,10 @@ class Window:
         root.title('Finsec P1 · SYNTHETIC INPUT ONLY'); root.geometry('1050x820')
         controls=ttk.Frame(root,padding=10); controls.pack(side='right',fill='y')
         self.status=tk.StringVar(value='Disconnected. User PC/physical touches are not recorded.')
+        self.preview_status=tk.StringVar(value='Preview disconnected. Connect to view the synthetic app.')
         ttk.Label(controls,text=args.device+'\n'+args.package).pack(anchor='w')
         self.replay_disabled=[]
-        for label,fn in [('Connect / launch (no reset)',self.connect),('RESET fixture (outside recording)',lambda:self.maintenance('reset')),('Toggle FLAG_SECURE (outside recording)',lambda:self.maintenance('secure_toggle')),('RECORD',self.record),('STOP recording',self.stop),('Replay JSON',self.replay),('Cancel run',self.cancel)]:
+        for label,fn in [('Connect (no reset)',self.connect),('RESET fixture (outside recording)',lambda:self.maintenance('reset')),('Toggle FLAG_SECURE (outside recording)',lambda:self.maintenance('secure_toggle')),('RECORD',self.record),('STOP recording',self.stop),('Replay JSON',self.replay),('Cancel run',self.cancel)]:
             button=ttk.Button(controls,text=label,command=fn); button.pack(fill='x',pady=3)
             if label!='Cancel run': self.replay_disabled.append(button)
         ttk.Separator(controls).pack(fill='x',pady=10)
@@ -36,10 +37,18 @@ class Window:
         ttk.Checkbutton(controls,text='I can see this frame clearly\n(required for coordinate input)',variable=self.visible).pack(anchor='w',pady=10)
         ttk.Label(controls,text='Click = tap; drag = swipe\nNo physical-touch capture.\nNetwork collection: none\nBlack image cause: unknown\nScreenshot pixels are not interpreted.\nStop closes input immediately.\nTransport uncertainty requires recovery.',wraplength=310).pack(anchor='w')
         ttk.Label(controls,textvariable=self.status,wraplength=315).pack(anchor='w',pady=12)
+        ttk.Label(controls,textvariable=self.preview_status,wraplength=315).pack(anchor='w')
         self.canvas=tk.Canvas(root,bg='#1f2937',highlightthickness=0); self.canvas.pack(side='left',fill='both',expand=True)
         self.canvas.bind('<ButtonPress-1>',self.press); self.canvas.bind('<ButtonRelease-1>',self.release)
         root.protocol('WM_DELETE_WINDOW',self.close)
         threading.Thread(target=self.worker,daemon=True).start(); root.after(50,self.drain); root.after(800,self.poll)
+    def clear_preview(self,reason):
+        # Invalidate both pixels and their input mapping; never leave stale input targets.
+        self.frame=None; self.image=None; self.start_point=None; self.visible.set(False)
+        self.canvas.delete('all')
+        self.canvas.create_text(25,30,anchor='nw',fill='white',text=reason,
+                                width=max(100,self.canvas.winfo_width()-50))
+        self.preview_status.set(reason)
     def worker(self):
         while True:
             fn,done=self.tasks.get()
@@ -53,6 +62,9 @@ class Window:
             while True:
                 done,result,error=self.answers.get_nowait(); self.busy=False
                 if error:
+                    reason=('Preview paused: target app is not foreground. Return to '+p.PACKAGE+'.'
+                            if isinstance(error,TargetNotForeground) else 'Preview unavailable: '+str(error))
+                    self.clear_preview(reason)
                     self.status.set(type(error).__name__+': '+str(error))
                     self.abort('Operation/observation failed: '+str(error))
                     if isinstance(error,Uncertain):
@@ -73,6 +85,7 @@ class Window:
             except OSError: pass
     def connect(self):
         if self.connected: self.status.set('Already connected'); return
+        self.clear_preview('Connecting; waiting for a fresh frame.')
         def work():
             self.lease.acquire()
             try: self.adapter.open()
@@ -81,7 +94,7 @@ class Window:
                 except Exception: self.lease.poison('Session cleanup failed')
                 if self.adapter.uncertain: self.lease.poison('Session creation outcome unknown')
                 self.lease.release(clean=not self.adapter.uncertain and not self.adapter.session); raise
-        def done(_): self.connected=True; self.status.set('Connected. Reset explicitly, then RECORD. Build hash verified.')
+        def done(_): self.connected=True; self.status.set('Connected. Open '+p.PACKAGE+' to view it. Build hash verified; reset remains explicit.')
         self.submit(work,done)
     def ready(self):
         if not self.connected: self.status.set('Connect selected device first'); return False
@@ -132,6 +145,8 @@ class Window:
         except Exception as e:self.status.set(str(e));return
         self.submit(lambda:self.engine.replay(route),lambda result:self.status.set('Replay '+result['status']+' · '+str(self.engine.j.path/'result.json')+' '+result.get('reason','')))
     def poll(self):
+        if self.connected and self.visible.get():
+            self.preview_status.set('Preview held for coordinate input. Uncheck the frame confirmation to resume updates.')
         if self.connected and not self.busy and not self.closing and self.start_point is None and not self.visible.get():
             def work():
                 self.adapter.foreground(); g=self.adapter.geometry(); result={'geometry':g}
@@ -139,22 +154,38 @@ class Window:
                     try: result[name]=fn()
                     except Uncertain: raise
                     except Exception as e:result[name+'_error']=str(e)
+                # The foreground can change while screenshot/source requests are in flight.
+                self.adapter.foreground()
+                result['received_at']=time.strftime('%H:%M:%S')
                 return result
             self.submit(work,self.render)
         if not self.closing:self.root.after(900,self.poll)
     def render(self,f):
-        self.frame=f; self.canvas.delete('all'); self.visible.set(False)
+        self.clear_preview('Waiting for a fresh frame.')
         if 'png' not in f:
-            self.image=None; self.canvas.create_text(25,30,anchor='nw',fill='white',text='Screenshot unavailable. Cause not inferred.\n'+f.get('png_error',''));return
+            self.clear_preview('Screenshot unavailable. Cause not inferred.\n'+f.get('png_error',''));return
         try:
             iw,ih=struct.unpack('>II',f['png'][16:24]); cw=max(self.canvas.winfo_width(),1); ch=max(self.canvas.winfo_height(),1)
             original=tk.PhotoImage(data=base64.b64encode(f['png']))
             factor=max(1,math.ceil(max(iw/cw,ih/ch))); self.image=original.subsample(factor)
+            self.canvas.delete('all')
             self.canvas.create_image(cw/2,ch/2,image=self.image)
+            self.frame=f
             f['display']=(cw,ch,self.image.width(),self.image.height()); f['pixels']=(iw,ih)
             if f['geometry']['width']!=iw or f['geometry']['height']!=ih:
                 f['mapping_error']='Screenshot/window geometry differs; input blocked'
-        except Exception as e:self.image=None;self.status.set('Image unavailable: '+str(e))
+            secure='unknown'
+            try:
+                states=[n.get('text') for n in ET.fromstring(f.get('xml','<empty/>')).iter()
+                        if n.get('resource-id')==p.PREFIX+'secure_state']
+                if len(states)==1 and states[0] in ('secure:on','secure:off'):secure=states[0]
+            except ET.ParseError:pass
+            message='Frame received '+f.get('received_at','unknown time')+'; fixture '+secure+'.'
+            if secure=='secure:on':message+=' FLAG_SECURE is ON; app pixels may be blank. No capture bypass.'
+            if 'xml' not in f:message+=' UI hierarchy unavailable.'
+            self.preview_status.set(message)
+        except Exception as e:
+            self.clear_preview('Image unavailable: '+str(e));self.status.set('Image unavailable: '+str(e))
     def point(self,event):
         if not self.frame or not self.image or 'display' not in self.frame:raise ValueError('No screenshot')
         if 'mapping_error' in self.frame:raise ValueError(self.frame['mapping_error'])
@@ -188,6 +219,7 @@ class Window:
     def close(self):
         if self.closing:return
         self.engine.stop_requested(); self.closing=True; self.status.set('Draining and closing owned session...')
+        self.clear_preview('Preview stopped; closing the session.')
         def cleanup():
             self.abort('Window closed')
             try:self.adapter.close()

@@ -3,6 +3,7 @@ import base64, hashlib, json, re, subprocess, urllib.request, urllib.error, urll
 from .protocol import PACKAGE
 ELEMENT='element-6066-11e4-a52e-4f735466cecf'
 class Uncertain(RuntimeError): pass
+class TargetNotForeground(RuntimeError): pass
 
 class Appium:
     def __init__(self,device,package,url='http://127.0.0.1:4723',*,session_create_timeout=90):
@@ -50,7 +51,7 @@ class Appium:
         if self.session:
             self.call('DELETE',''); self.session=None
     def foreground(self):
-        if self.call('GET','/appium/device/current_package')!=self.package: raise RuntimeError('Target is not foreground')
+        if self.call('GET','/appium/device/current_package')!=self.package: raise TargetNotForeground('Target is not foreground')
     def geometry(self):
         r=self.call('GET','/window/rect'); rotation=self.call('GET','/orientation')
         return {'width':r['width'],'height':r['height'],'rotation':rotation}
