@@ -48,8 +48,10 @@ class Lease:
     def poison(self,reason): atomic(self.quarantine,{'reason':reason,'time':datetime.datetime.now(datetime.timezone.utc).isoformat()})
     def release(self,clean=False):
         if self.handle:
-            if clean and not self.quarantine.exists(): self.active.unlink(missing_ok=True)
-            self.handle.close(); self.handle=None
+            try:
+                if clean and not self.quarantine.exists(): self.active.unlink(missing_ok=True)
+            finally:
+                self.handle.close(); self.handle=None
 
 class Journal:
     def __init__(self,root,kind):

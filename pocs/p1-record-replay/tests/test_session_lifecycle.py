@@ -189,6 +189,30 @@ class LeasePermissionTest(unittest.TestCase):
         self.assertIsNone(self.lease.handle)
         unlink.assert_not_called()
 
+    def test_release_denied_quarantine_check_closes_handle_without_deletion(self):
+        handle = Mock()
+        self.lease.handle = handle
+        with patch('pathlib.Path.exists', side_effect=PermissionError('Access denied checking quarantine')), patch(
+            'pathlib.Path.unlink'
+        ) as unlink:
+            with self.assertRaises(PermissionError):
+                self.lease.release(clean=True)
+        handle.close.assert_called_once()
+        self.assertIsNone(self.lease.handle)
+        unlink.assert_not_called()
+
+    def test_release_denied_active_marker_delete_closes_handle(self):
+        handle = Mock()
+        self.lease.handle = handle
+        with patch('pathlib.Path.exists', return_value=False), patch(
+            'pathlib.Path.unlink', side_effect=PermissionError('Access denied deleting active marker')
+        ) as unlink:
+            with self.assertRaises(PermissionError):
+                self.lease.release(clean=True)
+        handle.close.assert_called_once()
+        self.assertIsNone(self.lease.handle)
+        unlink.assert_called_once_with(missing_ok=True)
+
 
 if __name__ == '__main__':
     unittest.main()
