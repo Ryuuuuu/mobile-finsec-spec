@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "synthetic": true,
+  "date_utc": "2026-11-17",
+  "base_commit": "270c8bbb8680107ea805b6268471c3bc1f32250b",
+  "spec_commit": "5dab1c925e002c04466bda46ca9e930fe90c3b57",
+  "implementation_commit": "a55a6101d6217e00ccf8e1b90b9f06d901963b32",
+  "implementation_tree": "87dfd3449f0716abba58d2474526474af5eaa91e",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "python_openssl": "3.5.8",
+    "openssl_cli": "3.5.7",
+    "websockets": "16.0",
+    "jsonschema": "4.26.0"
+  },
+  "hawkeye_source_reviewed_this_change": false,
+  "hawkeye_source_reused": false,
+  "os_trust_proxy_device_settings_changed": false,
+  "committed_test_certificates_or_keys": false,
+  "tests": [
+    {
+      "suite": "P2",
+      "test_methods": 74,
+      "seconds": 7.048,
+      "failures": 0,
+      "skips": 0,
+      "result": "passed",
+      "cwd": "pocs/p2-proxy-relay",
+      "command": "python -m unittest discover -s tests -v"
+    },
+    {
+      "suite": "P4",
+      "test_methods": 126,
+      "seconds": 14.175,
+      "failures": 0,
+      "skips": 0,
+      "result": "passed",
+      "cwd": "pocs/p4-integration",
+      "command": "python -m unittest discover -s tests -v"
+    }
+  ],
+  "checks": {
+    "git_diff_check": "passed",
+    "python_ast": "passed",
+    "tabnanny": "passed",
+    "secret_pattern_findings": 0,
+    "repository_lint_config_found": false,
+    "repository_ci_workflow_found": false
+  },
+  "supported": [
+    "fixed loopback HTTP/1.1 GET/POST Content-Length",
+    "TLS termination with verified upstream and explicit per-leg metadata",
+    "RFC6455 WS/WSS handshake and original directional frames",
+    "record/stop immutable WS boundary and HTTP response drain",
+    "SQLite query/restart and P4 default HTTP compatibility"
+  ],
+  "unsupported": [
+    "general CONNECT proxy or encrypted tunnel",
+    "dynamic MITM CA lifecycle and device trust installation",
+    "WS compression/extensions/subprotocol negotiation",
+    "HTTP/2/3/QUIC/UDP",
+    "HTTP keep-alive/chunked",
+    "real app routing or attribution"
+  ],
+  "unverified": [
+    "Windows and Python 3.11 runtime combinations",
+    "physical devices and real traffic",
+    "P4 WSS scenario",
+    "dedicated expiry/revocation/mTLS fixtures",
+    "long-running slow-trickle and load",
+    "power failure and permanent filesystem stall"
+  ]
+}

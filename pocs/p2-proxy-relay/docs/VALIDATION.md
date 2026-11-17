@@ -1,4 +1,105 @@
-# P2 검증 기록
+# P2 HTTPS/WS 확장 검증 기록
+
+2026-11-17 UTC. **localhost synthetic 통신만 검증했다.** 실제 사용자 기기·앱·트래픽·계정·키를
+사용하지 않았으며 OS trust store/proxy/보안 설정을 변경하지 않았다. 아래 v2 결과와 이어지는
+v1 과거 기록을 구분한다. 기계 판독 결과는 [validation-summary.json](validation-summary.json).
+
+## 단계와 코드 기준
+
+1. 최신 원격 기준선 `270c8bbb8680107ea805b6268471c3bc1f32250b` 확인. 적용할 AGENTS.md/
+   .agents skill, lint 설정, GitHub workflow는 발견하지 못했다.
+2. 구현 전 명세 commit `5dab1c925e002c04466bda46ca9e930fe90c3b57`.
+3. 독립 TLS/WS 구현·테스트·한국어 실행 문서 commit `a55a6101d6217e00ccf8e1b90b9f06d901963b32`.
+   검증한 tree는 `87dfd3449f0716abba58d2474526474af5eaa91e`다.
+4. 본 검증 보고서는 구현 뒤 별도 commit한다. 마지막 SHA는 원격 main 확인 후 완료 보고에 남긴다.
+
+Git CLI의 HTTPS 쓰기 인증이 없어 연결된 GitHub 도구로 동일 tree의 commit과 fast-forward ref
+갱신을 수행했다. expected SHA를 확인했고 force=false로 반영했다. 로컬/원격 tree 일치를 확인했다.
+
+Hawkeye가 HTTPS/WebSocket을 지원했다는 사용자 요구를 반영했다. 이번 로컬 조사 시도는 환경
+초기화 오류로 파일을 읽지 못했다. 원본 TLS/WS 코드를 검토·실행·재사용했다고 주장하지 않는다.
+
+## 실행 환경 및 결과
+
+Linux x86_64 cloud, Python 3.12.14, SQLite 3.53.1, Python SSL OpenSSL 3.5.8,
+인증서 생성 OpenSSL CLI 3.5.7, websockets 16.0, P4 기존 jsonschema 4.26.0.
+TLS test helper는 임시 폴더에 합성 CA/localhost leaf 인증서·키를 생성하고 종료 시 제거한다.
+인증서·키·runtime DB는 Git에 넣지 않았다. Windows·실기기 결과로 해석하지 않는다.
+
+|suite|test method 수|시간|결과|
+|---|---:|---:|---|
+|P2 전체|74|7.048s|통과, 실패 0, skip 0|
+|P4 회귀|126|14.175s|통과, 실패 0, skip 0|
+|합계|200||통과|
+
+P2는 기존 HTTP/CLI 38개 + WS 20개 + TLS/WSS 15개 + 실제 CLI WSS 1개다.
+subTest case는 method 수에 더하지 않았다. 시간은 이 cloud 실행값이며 성능 기준이 아니다.
+
+저장소 루트에서 재현:
+
+```bash
+python -m pip install -r pocs/p4-integration/requirements.txt
+(cd pocs/p2-proxy-relay && python -m unittest discover -s tests -v)
+(cd pocs/p4-integration && python -m unittest discover -s tests -v)
+```
+
+기준선 검증도 P2 38/38, P4 126/126 통과했다. 첫 P4 실행을 repo 루트에서 수행했을 때
+2개 module import 오류가 있었으며 README 지정 P4 cwd에서 정상화했다. 제품 코드 결함으로
+취급하지 않았다. 신규 TLS 시험의 초기 CA 개수 assertion 실패는 cloud SSLContext의 추가
+신뢰 metadata 차이였다. 설정한 CA 파일 자체를 fingerprint하도록 수정한 뒤 위 최종 시험은 통과했다.
+
+## 확인한 범위
+
+|영역|검증 결과|
+|---|---|
+|HTTPS|실제 client TLS → relay 종단 → 검증된 upstream TLS 전달; 복호화 HTTP 원문/hash 저장. 한쪽 leg만 TLS인 설정도 명시적으로 구분|
+|Trust|알 수 없는 CA, 잘못된 hostname 거부; client의 relay 신뢰 실패; plaintext fallback 없음; 실제 협상 TLS version/peer fingerprint/upstream_verified 기록|
+|Handshake 소유권|TLS를 보내지 않는 연결도 relay task가 소유하며 OFF로 종료. 활성 TLS stream/port/DB 자원 회수|
+|실제 WS/WSS|HTTP Upgrade와 양방향 text/binary/continuation/ping/pong/close 전달. GUI 이벤트 채널이 아닌 localhost socket traffic|
+|Frame 경계|분할 TCP/합쳐진 frame/Upgrade 직후 frame, 원본 masking·opcode·FIN·direction·frame 순번·message ID, wire 및 unmasked payload hash 보존|
+|Fragment|분할 UTF-8과 중간 ping, continuation 순서/누적 message 한도. 기록 경계를 건너는 message context 부재를 partial로 표시|
+|RECORD/STOP|부분 frame 제외, 열린 message snapshot/gap, 기존 WS/WSS 연결에서 다음 RECORD, STOP 후 송수신 지속. 늦은 frame/close/오류가 마감 recording metadata·counter·packet을 수정하지 않음|
+|HTTP drain|TLS에도 기존 식별된 HTTP 응답만 drain; deadline 이후 기록 불변. WS frame을 임의 request-response pair로 만들지 않음|
+|실패 경로|잘못된 handshake/확장·subprotocol, masking/opcode/RSV/control/길이/UTF-8/close/크기 거부; abrupt EOF와 OFF 강제 종료 partial|
+|손실/저장|WS queue overflow·storage fault·raw prefix 절단 시 전달 지속과 partial 표시, 전체/저장 hash 구분; 재시작 query 동일|
+|CLI/P4|독립 websockets client/server + 실제 relay.py subprocess WSS 송수신/STOP/QUIT/재시작 조회; P4 동적 로드/기본 HTTP exact bytes·hash·기록·cleanup 계약 유지|
+
+독립 검토에서 발견한 WSS frame/lifecycle의 협상 metadata 누락, handshake 이후 recording 오류
+counter 귀속, 방향별 frame 순번 누락을 수정하고 시험으로 확인했다. `websockets` codec을 고정
+버전으로 사용하며 직접 전체 RFC6455 decoder를 작성하지 않았다. 작은 adapter가 bounded read,
+fragment/message 상태와 UTF-8, strict 지원 scope를 관리한다.
+
+## 정적·공개 저장소 점검
+
+- `git diff --check`, Python AST parse, `python -m tabnanny` 통과.
+- 별도 repository lint config/명령 및 CI workflow 없음. 이를 lint 전체 규칙 또는 CI 성공으로
+  과장하지 않는다. 원격 SHA의 연결된 status/workflow 조회 결과는 완료 보고에서 확인한다.
+- 변경 파일의 실제 private-key/certificate block, GitHub/AWS/API token 패턴, credential URL 및
+  추적 대상의 PEM/key/DB/pcap 등 runtime 파일 점검에서 발견 0. 합성 코드의 PEM parser 문자열은
+  실제 인증서 값과 구분했다. 이 패턴 점검이 가능한 모든 비밀 탐지를 보장하는 것은 아니다.
+- 테스트 PKI는 임시 생성하며 `SSLKEYLOGFILE`을 통한 key logging이 활성화되지 않음을 확인했다.
+
+## 정확한 한계와 다음 게이트
+
+- **고정 loopback TLS 종단/복호화**다. 일반 CONNECT/임의 목적지 forward proxy나 암호화 tunnel,
+  동적 MITM CA 발급·설치·회전·만료/제거 lifecycle, pinning 우회는 구현하지 않았다.
+- HTTP는 기존 제한 HTTP/1.1 GET/POST Content-Length, 연결당 transaction 하나다. WS extensions/
+  compression/subprotocol, HTTP/2 extended CONNECT·HTTP/3·QUIC/UDP는 미지원이다.
+- wire frame 원문은 TLS record가 아니다. raw prefix 한도 초과 시 원본 복원 불가이며 payload는
+  별도 hash/size만 제공한다. record row 수는 HTTP 요청 수와 다르다.
+- Python 3.11 및 다른 OS/OpenSSL 조합, Windows TLS/WS·파일 잠금·종료, 실제 앱 routing/attribution,
+  실제 기기 신뢰/프록시 복원, P4 자체 WSS 시나리오는 미검증이다.
+- TLS 만료 검증은 SSLContext에 위임하며 만료/revocation/client-certificate/mTLS 별도 fixture는
+  시험하지 않았다. OS 기본 CA trust 변화·제품 CA 관리도 검증하지 않았다.
+- WS frame 조립 시간과 방향별 idle timeout은 bounded지만 장시간 slow-trickle/대규모 부하/
+  영구 filesystem stall/전원 장애 시험은 수행하지 않았다. 기존 전체 DB quota·보존 정책·
+  exactly-once crash 한계도 그대로다.
+- complete_for_supported_scope는 명시한 synthetic 지원 범위의 수집 상태다. 전체 앱 트래픽
+  수집이나 보안 항목의 양호 판정이 아니다.
+
+---
+
+# v1 HTTP 기준선의 과거 검증 기록
 
 ## 최종 코드와 결과
 
