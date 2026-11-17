@@ -1,0 +1,219 @@
+{
+  "schema_version": "1.0",
+  "synthetic": true,
+  "date_utc": "2026-11-17",
+  "base_commit": "631e1ad",
+  "spec_commit": "c2b57cdfb113ae27fb50a672ea5b509c41f13c2d",
+  "implementation_commit": "a9281bde845f3ce7ff6450e1dfc57a2f9572390e",
+  "environment": {
+    "os": "Linux",
+    "architecture": "x86_64",
+    "python": "3.12.14",
+    "sqlite": "3.53.1",
+    "jsonschema": "4.26.0"
+  },
+  "tests": [
+    {
+      "suite": "P4",
+      "test_methods": 126,
+      "seconds": 14.477,
+      "result": "passed",
+      "command": "python -m unittest discover -s tests -v"
+    },
+    {
+      "suite": "P2",
+      "test_methods": 38,
+      "seconds": 3.133,
+      "result": "passed",
+      "command": "python -m unittest discover -s tests -v"
+    },
+    {
+      "suite": "P3",
+      "test_methods": 58,
+      "seconds": 3.861,
+      "result": "passed",
+      "command": "python -m unittest discover -s tests -v"
+    }
+  ],
+  "cli_demos": [
+    {
+      "scenario": "normal",
+      "exit_code": 0,
+      "execution_status": "completed",
+      "reason_code": "RUN_COMPLETED",
+      "verdict_counts": {
+        "pass": 1,
+        "fail": 1,
+        "inconclusive": 1
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "proxy-off",
+      "exit_code": 0,
+      "execution_status": "completed",
+      "reason_code": "RUN_COMPLETED",
+      "verdict_counts": {
+        "pass": 1,
+        "fail": 1,
+        "inconclusive": 1
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 0,
+      "p2_coverage": "none",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "main-error",
+      "exit_code": 2,
+      "execution_status": "failed",
+      "reason_code": "MAIN_ERROR",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "main-hang",
+      "exit_code": 3,
+      "execution_status": "failed",
+      "reason_code": "MAIN_HANG",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "item-hang",
+      "exit_code": 3,
+      "execution_status": "failed",
+      "reason_code": "ITEM_HANG",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "tool-timeout",
+      "exit_code": 3,
+      "execution_status": "failed",
+      "reason_code": "TOOL_TIMEOUT",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "cancel",
+      "exit_code": 4,
+      "execution_status": "cancelled",
+      "reason_code": "RUN_CANCELLED",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": false,
+      "cleanup_status": "completed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "ignored-cancel",
+      "exit_code": 4,
+      "execution_status": "cancelled",
+      "reason_code": "RUN_CANCELLED",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": true,
+      "cleanup_status": "unknown",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "cleanup-failed",
+      "exit_code": 2,
+      "execution_status": "failed",
+      "reason_code": "CLEANUP_FAILED",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 1,
+        "inconclusive": 1
+      },
+      "recovery_required": true,
+      "cleanup_status": "failed",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    },
+    {
+      "scenario": "disconnect",
+      "exit_code": 2,
+      "execution_status": "failed",
+      "reason_code": "DEVICE_DISCONNECTED",
+      "verdict_counts": {
+        "pass": 0,
+        "fail": 0,
+        "inconclusive": 2
+      },
+      "recovery_required": true,
+      "cleanup_status": "unknown",
+      "p2_packets": 1,
+      "p2_coverage": "complete_for_supported_scope",
+      "validate": "passed",
+      "history_rows": 1
+    }
+  ],
+  "unverified": [
+    "P1 integration and GUI recording",
+    "GPUI/gpui-kit UI",
+    "real AI providers or model compatibility",
+    "physical devices/ADB/Appium/actual financial apps",
+    "OS-enforced gateway isolation and process termination",
+    "permanent filesystem stall termination",
+    "automatic recovery/resume"
+  ]
+}
