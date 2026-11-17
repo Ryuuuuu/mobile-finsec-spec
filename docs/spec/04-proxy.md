@@ -72,3 +72,12 @@ IDOR/replay 입력은 승인된 QA endpoint, 테스트 사용자 A/B의 로컬 s
 ## 검증 게이트
 
 Hawkeye headless relay 분리, 선택 기기에 대한 routing 적용, TLS/certificate lifecycle, HTTP·HTTP/2·QUIC 등 실제 지원 목록, reconnect/drain 성능을 독립 PoC로 검증한다. 확인 전 지원을 선언하지 않는다. 실제 키·payload·계정은 Git에 저장하지 않는다.
+
+
+## P2 HTTPS/WS 독립 검증 범위 (2026-11-17)
+
+P2 확장 실행 명세는 [v2 계약](../../pocs/p2-proxy-relay/docs/EXECUTION-SPEC.md)에 고정한다.
+고정 localhost TLS 종단에서 HTTPS 및 실제 WS/WSS frame을 수집하고 upstream 인증서를 검증한다.
+이는 일반 CONNECT tunnel, 동적 MITM CA, 실제 앱 routing 또는 GUI용 WebSocket 채널과 다르다.
+WS는 방향별 frame/연결 lifecycle을 별도 kind로 기록하며 STOP 후 임의 server frame을 HTTP
+응답 drain에 포함하지 않는다. 최종 지원/시험 완료 범위는 구현 후 검증 보고서로 확인한다.

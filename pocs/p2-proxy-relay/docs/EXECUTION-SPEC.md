@@ -1,4 +1,4 @@
-# P2 실행 명세 v1 — 구현 전 기준선
+# P2 실행 명세 — v1 기준선 및 v2 TLS/WS 확장
 
 ## 가설과 범위
 
@@ -44,3 +44,78 @@ capture coverage는 complete_for_supported_scope/partial/none/unknown이며 실�
 
 - 단계 1: 기존 설계/P0 읽기 완료. 저장소 및 상위 경로에서 적용할 AGENTS.md/관련 .agents SKILL.md 없음. 이 명세를 구현 전에 커밋한다.
 - 단계 2: 독립 relay/SQLite/CLI/합성 fixture 구현. 초기 28개 loopback 시험 통과 후 CLI·저장 장애 회귀 검증을 추가한다. 최종 결과는 VALIDATION.md에 기록한다.
+
+
+## v2 확장 명세 (2026-11-17, 구현 전 확정)
+
+사용자 요구는 Hawkeye가 지원하던 HTTPS 및 실제 앱 트래픽 WebSocket/WSS 수집이다.
+이번 Hawkeye 로컬 조사 시도는 실행 환경 초기화 오류로 파일을 읽지 못했다. 원본 TLS/WS
+코드를 검토·실행·재사용하지 않는다. 기존 검토 문서와 사용자 요구를 바탕으로 독립 구현한다.
+아래 범위는 v1의 TLS/upgrade 제외를 대체하며, 기본 HTTP 및 P4 JSON v1 계약은 유지한다.
+
+### 전달과 trust
+
+- 고정 `127.0.0.1` client → relay → upstream 구조를 유지한다. TLS listener와 upstream TLS는
+  각각 opt-in이며 TLS listener에는 명시적 테스트 인증서/키 파일을 제공한다. TLS1.2 이상,
+  HTTP/1.1 ALPN 범위다. TLS는 relay에서 종단되어 평문 HTTP/WS를 수집한다.
+- upstream TLS는 체인/만료/호스트 이름 검증을 활성화한다. 시스템 기본 신뢰 또는 명시적인
+  테스트 CA 파일을 사용한다. 검증 실패를 우회하거나 평문으로 fallback하지 않는다.
+- 상태와 기록에 TLS 각 leg, 검증 모드, CA/서버 인증서 fingerprint와 설정 버전을 snapshot한다.
+  키·원문 인증서·개인 경로는 출력하거나 Git에 저장하지 않는다.
+- 일반 CONNECT/임의 목적지 proxy, 암호화 바이트 터널, 동적 MITM CA 발급, OS/기기 trust 설치,
+  pinning 우회, routing/hook 및 OS proxy 변경은 지원하지 않는다. HTTPS/WSS 복호화 검증은
+  테스트 client가 테스트 relay 인증서를 명시적으로 신뢰하는 localhost 환경에 한정한다.
+- TLS handshake도 relay가 소유하는 task 안에서 수행하여 OFF의 제한 시간·취소·정리 대상에 둔다.
+
+### 실제 WebSocket frame 계약
+
+- opt-in WS는 HTTP/1.1 GET Upgrade handshake와 RFC6455 text/binary/continuation/ping/pong/close를
+  양방향 처리한다. WSS는 같은 WS 경로에 TLS를 결합한다. GUI 이벤트 채널 구현이 아니다.
+- WebSocket codec은 `websockets==16.0`의 Frame.parse/Close 및 handshake 검증 도구를 사용한다.
+  이 버전의 codec adapter에 의존하며 자체 전체 프로토콜을 구현하지 않는다. 작은 adapter가
+  fragment 순서·누적 크기·UTF-8을 검증한다. 원본 frame wire bytes를 전달하고 frame 경계,
+  방향, opcode, FIN, connection별 frame 순번과 message 연계를 보존한다.
+- HTTP transaction, WS handshake, WS frame, WS lifecycle은 서로 다른 kind다. WS frame은
+  request/response 쌍으로 추정하지 않는다. 목록은 payload를 제외하고 상세는 raw base64와
+  hash/size를 제공한다. wire frame과 unmasked payload 의미를 명확하게 표시한다.
+- opened/closed/error/off 종료와 기록 시작 전 연결 context를 표시한다. ping/pong/close는
+  실제 peer가 보낸 프레임으로 전달·기록하며 GUI/AI 응답을 기다리지 않는다.
+- extension(압축 포함)/subprotocol negotiation, HTTP/2 extended CONNECT, HTTP/3/QUIC,
+  일반 HTTP keep-alive/chunked/pipelining 등 v1의 나머지 제외는 지원하지 않는다.
+- header/frame/message/connection/저장 queue/recording row 수는 bounded다. 한도·decoder·TLS·
+  upstream·저장 실패를 구분하며 수집 손실은 partial이다. packet 수는 HTTP 요청 수와 같지 않다.
+
+### RECORD/STOP 및 자원 소유권
+
+- HTTP는 기존 완전히 식별된 요청의 response drain 계약을 유지한다.
+- WS는 완전히 파싱·검증된 frame 단위로 현재 recording에 귀속한다. STOP은 신규 WS frame와
+  lifecycle 기록을 즉시 봉인한다. 이후 server frame을 이전 client frame의 응답으로 추측하여
+  drain하지 않는다. 부분 frame/열린 fragmented message·연결 상태를 STOP snapshot에 남긴다.
+- STOP 뒤 연결과 실제 전달은 계속된다. 기존 연결에서 새 RECORD를 열 수 있으며 이전 context
+  부재를 표시한다. 종료된 recording은 이후 frame/close/error로 변경하지 않는다.
+- OFF는 두 방향 pump, TLS handshake, stream을 소유하고 bounded drain 뒤 취소/join한다.
+  DB writer·listener·task 정리 및 재시작 조회에 대한 기존 P4 관측값을 보존한다.
+
+### 구현 후 synthetic 인수 시험
+
+1. 신뢰된 테스트 TLS 양방향 HTTPS 전달/평문 저장/hash, upstream 잘못된 CA·호스트 이름 거부,
+   평문 fallback 없음, 테스트 client의 relay 신뢰 실패 및 handshake 중 OFF 정리.
+2. WS와 WSS의 실제 handshake/양방향 frame 전달, text/binary, 분할 TCP·합쳐진 read·fragment,
+   ping/pong/close, frame 경계·direction·연결 lifecycle·hash 및 재시작 조회.
+3. RECORD 전/STOP 후 frame 제외, 기존 연결에서 RECORD 재시작, STOP 중 부분 frame,
+   열린 fragmented message, 늦은 close/error가 봉인된 기록을 바꾸지 않음.
+4. 잘못된 handshake/frame/masking/UTF-8, 크기 제한, abrupt EOF/timeout/OFF, queue loss 및 절단
+   가시성. 종료 후 모든 소유 task·포트·DB lock 회수.
+5. P2 기존 38개 및 P4 기존 126개 회귀, repo 요구 검증과 비밀정보 점검. 지원/미지원,
+   실제 수행 결과와 미검증 Windows/실기기/부하/CA lifecycle을 구분하여 문서화.
+
+테스트 인증서는 실행 때 임시 폴더에서 생성하고 테스트 SSLContext에만 적용한다. 실제 사용자
+계정·식별자·트래픽·키·기기 또는 보안 설정을 사용하거나 변경하지 않는다.
+
+기준선: `270c8bbb8680107ea805b6268471c3bc1f32250b`, P2 38/38 통과, P4 지정 디렉터리 126/126 통과.
+P4를 repo 루트에서 처음 실행한 경우 import 경로 오류 2개가 있었으며 README 지정 cwd에서 해결했다.
+추가 AGENTS.md/.agents, lint 설정, CI workflow는 기준선에서 발견하지 못했다.
+
+공식 참고: [Python SSL](https://docs.python.org/3.12/library/ssl.html),
+[asyncio streams](https://docs.python.org/3.12/library/asyncio-stream.html),
+[websockets Sans-I/O](https://websockets.readthedocs.io/en/stable/reference/sansio/common.html).
