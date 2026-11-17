@@ -27,6 +27,9 @@ def window():
     w.lease = Mock()
     w.replay_disabled = []
     w.busy = True
+    w.observing = False
+    w.pending_input = None
+    w.tasks = queue.Queue()
     w.closing = False
     w.connected = True
     w.adapter = Mock()
@@ -34,6 +37,68 @@ def window():
 
 
 class PreviewLifecycleTest(unittest.TestCase):
+    def test_close_waits_for_cleanup_without_querying_destroyed_tk(self):
+        w = window(); w.engine.stop_requested = Mock()
+        w.adapter.uncertain = False; w.adapter.session = None
+        w.root.winfo_exists.side_effect = AssertionError('Tk queried after destruction')
+        w.close()
+        cleanup, finished = w.tasks.get_nowait()
+        drain_close = w.root.after.call_args.args[1]
+        w.root.after.reset_mock()
+        drain_close()  # Cleanup is still running: keep draining without destroying Tk.
+        w.root.destroy.assert_not_called()
+        w.root.after.assert_called_once_with(100, drain_close)
+        cleanup()
+        w.adapter.close.assert_called_once()
+        w.lease.release.assert_called_once_with(clean=True)
+        w.answers.put((finished, None, None))
+        w.root.after.reset_mock()
+        drain_close()
+        w.root.destroy.assert_called_once()
+        w.root.after.assert_not_called()
+        w.root.winfo_exists.assert_not_called()
+
+    def test_input_waits_once_for_preview_and_duplicate_is_rejected(self):
+        w = window(); w.observing = True
+        action = Mock(); done = Mock()
+        self.assertTrue(w.ready())
+        self.assertTrue(w.submit(action, done))
+        self.assertFalse(w.ready())
+        self.assertFalse(w.submit(Mock()))
+        w.answers.put((None, {}, None)); w.drain()
+        self.assertEqual(w.tasks.get_nowait(), (action, done))
+        self.assertTrue(w.busy)
+        self.assertFalse(w.observing)
+        self.assertIsNone(w.pending_input)
+
+    def test_preview_failure_discards_waiting_input_without_dispatch(self):
+        for error in (TargetNotForeground('home'), Uncertain('timeout')):
+            w = window(); w.observing = True
+            w.submit(Mock())
+            w.answers.put((w.render, None, error)); w.drain()
+            self.assertTrue(w.tasks.empty())
+            self.assertIsNone(w.pending_input)
+
+    def test_hold_selected_during_capture_preserves_displayed_frame(self):
+        w = window(); w.visible.get.return_value = True
+        previous = w.frame
+        w.render({'png': b'unused pending image'})
+        self.assertIs(w.frame, previous)
+        w.visible.set.assert_not_called()
+        w.canvas.delete.assert_not_called()
+
+    def test_manual_completion_releases_hold_for_updated_screen(self):
+        w = window(); w.visible.get.return_value = True
+        w.answers.put((None, None, None)); w.drain()
+        w.visible.set.assert_called_with(False)
+
+    def test_close_discards_input_waiting_for_preview(self):
+        w = window(); w.observing = True
+        w.submit(Mock()); w.closing = True
+        w.answers.put((None, {}, None)); w.drain()
+        self.assertTrue(w.tasks.empty())
+        self.assertIsNone(w.pending_input)
+
     def assert_invalidated(self, w):
         self.assertIsNone(w.frame)
         self.assertIsNone(w.image)

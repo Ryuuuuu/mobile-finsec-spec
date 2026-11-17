@@ -9,7 +9,8 @@ from . import protocol as p
 class Window:
     def __init__(self,root,args):
         self.root=root; self.args=args; self.tasks=queue.Queue(); self.answers=queue.Queue()
-        self.busy=False; self.closing=False; self.connected=False; self.frame=None; self.image=None; self.start_point=None
+        self.busy=False; self.observing=False; self.pending_input=None
+        self.closing=False; self.connected=False; self.frame=None; self.image=None; self.start_point=None
         self.adapter=Appium(args.device,args.package,args.server,session_create_timeout=args.session_create_timeout); self.engine=Engine(self.adapter,args.output,args.allow_coordinates)
         self.lease=Lease(args.device)
         root.title('Finsec P1 · SYNTHETIC INPUT ONLY'); root.geometry('1050x820')
@@ -55,12 +56,18 @@ class Window:
             try: result=fn(); self.answers.put((done,result,None))
             except Exception as e: self.answers.put((done,None,e))
     def submit(self,fn,done=None):
+        if self.busy and self.observing and self.pending_input is None and not self.closing:
+            self.pending_input=(fn,done)
+            self.status.set('Input accepted; waiting for the current preview request.')
+            return True
         if self.busy or self.closing: self.status.set('Busy; duplicate/queued operation rejected'); return False
         self.busy=True; self.tasks.put((fn,done)); return True
     def drain(self):
         try:
             while True:
                 done,result,error=self.answers.get_nowait(); self.busy=False
+                was_observing=self.observing; self.observing=False
+                pending=self.pending_input; self.pending_input=None
                 if error:
                     reason=('Preview paused: target app is not foreground. Return to '+p.PACKAGE+'.'
                             if isinstance(error,TargetNotForeground) else 'Preview unavailable: '+str(error))
@@ -70,7 +77,10 @@ class Window:
                     if isinstance(error,Uncertain):
                         self.lease.poison(str(error)); self.connected=False
                         self.abort('Transport outcome unknown')
-                elif done: done(result)
+                else:
+                    if not was_observing:self.visible.set(False)
+                    if done: done(result)
+                    if pending and not self.closing:self.submit(*pending)
         except queue.Empty: pass
         if not self.closing:
             for button in self.replay_disabled: button.state(['disabled'] if self.engine.mode=='replaying' else ['!disabled'])
@@ -98,7 +108,7 @@ class Window:
         self.submit(work,done)
     def ready(self):
         if not self.connected: self.status.set('Connect selected device first'); return False
-        if self.busy: self.status.set('Busy; duplicate operation rejected'); return False
+        if self.busy and (not self.observing or self.pending_input is not None): self.status.set('Busy; duplicate operation rejected'); return False
         return True
     def maintenance(self,name):
         if not self.ready(): return
@@ -158,9 +168,13 @@ class Window:
                 self.adapter.foreground()
                 result['received_at']=time.strftime('%H:%M:%S')
                 return result
-            self.submit(work,self.render)
+            if self.submit(work,self.render):self.observing=True
         if not self.closing:self.root.after(900,self.poll)
     def render(self,f):
+        # A hold selected during an in-flight observation applies to the displayed frame.
+        if self.visible.get() and self.frame is not None and 'png' in f:
+            self.preview_status.set('Preview held for coordinate input. Uncheck the frame confirmation to resume updates.')
+            return
         self.clear_preview('Waiting for a fresh frame.')
         if 'png' not in f:
             self.clear_preview('Screenshot unavailable. Cause not inferred.\n'+f.get('png_error',''));return
@@ -226,10 +240,16 @@ class Window:
             except Exception as e:self.lease.poison('Cleanup not confirmed: '+str(e))
             if self.adapter.uncertain:self.lease.poison('Transport uncertainty; manually stop Appium before recovery')
             self.lease.release(clean=not self.adapter.uncertain and not self.adapter.session)
-        self.tasks.put((cleanup,lambda _:self.root.destroy()))
+        finished=False
+        def finish_close(_):
+            nonlocal finished
+            finished=True
+            self.root.destroy()
+        self.tasks.put((cleanup,finish_close))
         def drain_close():
             self.drain()
-            if self.root.winfo_exists():self.root.after(100,drain_close)
+            # destroy also removes Tk's winfo command; use Python completion state.
+            if not finished:self.root.after(100,drain_close)
         self.root.after(100,drain_close)
 
 def main():
