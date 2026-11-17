@@ -1,0 +1,6 @@
+<resources>
+ <item type="id" name="state"/><item type="id" name="draft"/>
+ <item type="id" name="next"/><item type="id" name="confirm"/>
+ <item type="id" name="reset"/><item type="id" name="secure"/>
+ <item type="id" name="secret"/>
+</resources>
