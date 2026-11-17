@@ -1,4 +1,4 @@
-"""P2 synthetic-only, fixed loopback HTTP/1.1 relay. No device integration."""
+"""P2 synthetic-only fixed loopback HTTP(S) and optional WS(S) capture relay."""
 from __future__ import annotations
 
 import argparse
@@ -9,11 +9,13 @@ from contextlib import closing
 from dataclasses import dataclass
 from datetime import datetime, timezone
 import hashlib
+import importlib.util
 import json
 import math
 from pathlib import Path
 import re
 import sqlite3
+import ssl
 import sys
 import time
 import uuid
@@ -56,8 +58,32 @@ class Config:
     max_transactions: int = 1000
     max_connections: int = 64
     capture_body_bytes: int = 65536
+    listener_cert: Path | None = None
+    listener_key: Path | None = None
+    upstream_tls: bool = False
+    upstream_ca: Path | None = None
+    upstream_server_name: str = 'localhost'
+    enable_websocket: bool = False
+    max_websocket_frame_bytes: int = 1048576
+    max_websocket_message_bytes: int = 1048576
+    websocket_idle_timeout: float = 30.0
 
     def validate(self):
+        if type(self.enable_websocket) is not bool:
+            raise ValueError('invalid_enable_websocket')
+        for name in ('listener_cert', 'listener_key', 'upstream_ca'):
+            value = getattr(self, name)
+            if value is not None and not isinstance(value, Path):
+                raise ValueError('invalid_tls_path:' + name)
+        if (self.listener_cert is None) != (self.listener_key is None):
+            raise ValueError('listener_certificate_key_pair_required')
+        if type(self.upstream_tls) is not bool:
+            raise ValueError('invalid_upstream_tls')
+        if self.upstream_ca is not None and not self.upstream_tls:
+            raise ValueError('upstream_ca_requires_tls')
+        if (not isinstance(self.upstream_server_name, str)
+                or not re.fullmatch(r'[A-Za-z0-9][A-Za-z0-9.-]{0,252}', self.upstream_server_name)):
+            raise ValueError('invalid_upstream_server_name')
         if self.host != '127.0.0.1':
             raise ValueError('loopback_ipv4_only')
         for port in (self.listen_port, self.upstream_port):
@@ -68,13 +94,55 @@ class Config:
         if self.listen_port and self.listen_port == self.upstream_port:
             raise ValueError('relay_upstream_port_conflict')
         for name in ('queue_size', 'max_body_bytes', 'max_header_bytes', 'max_transactions',
-                     'max_connections', 'capture_body_bytes'):
+                     'max_connections', 'capture_body_bytes', 'max_websocket_frame_bytes',
+                     'max_websocket_message_bytes'):
             if type(getattr(self, name)) is not int or not 1 <= getattr(self, name) <= 16777216:
                 raise ValueError('invalid_limit:' + name)
-        for name in ('io_timeout', 'relay_off_drain_ms', 'record_stop_response_drain_ms'):
+        for name in ('io_timeout', 'relay_off_drain_ms', 'record_stop_response_drain_ms', 'websocket_idle_timeout'):
             value = getattr(self, name)
             if isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 < value <= 60000:
                 raise ValueError('invalid_timeout:' + name)
+
+
+def tls_contexts(config):
+    """Explicit contexts never inherit SSLKEYLOGFILE or disable verification."""
+    listener = upstream = None
+    metadata = dict(configuration_version=1, listener_enabled=config.listener_cert is not None,
+                    upstream_enabled=config.upstream_tls, minimum_version='TLSv1.2',
+                    listener_certificate_sha256=None, upstream_ca_sha256=[],
+                    upstream_trust='disabled', upstream_server_name=None)
+    if config.listener_cert is not None:
+        listener = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        listener.minimum_version = ssl.TLSVersion.TLSv1_2
+        listener.set_alpn_protocols(['http/1.1'])
+        # An encrypted key must fail without prompting on the command channel.
+        listener.load_cert_chain(config.listener_cert, config.listener_key, password='')
+        pem = config.listener_cert.read_text(encoding='ascii')
+        certificate = re.search(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
+                                pem, re.DOTALL)
+        if certificate is None:
+            raise ValueError('listener_certificate_invalid')
+        metadata['listener_certificate_sha256'] = hashlib.sha256(
+            ssl.PEM_cert_to_DER_cert(certificate.group())).hexdigest()
+    if config.upstream_tls:
+        upstream = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+        upstream.minimum_version = ssl.TLSVersion.TLSv1_2
+        upstream.set_alpn_protocols(['http/1.1'])
+        # PROTOCOL_TLS_CLIENT defaults require chain and hostname verification.
+        if config.upstream_ca is None:
+            upstream.load_default_certs(ssl.Purpose.SERVER_AUTH)
+            metadata['upstream_trust'] = 'system'
+        else:
+            upstream.load_verify_locations(cafile=config.upstream_ca)
+            metadata['upstream_trust'] = 'explicit_ca'
+            # Snapshot the supplied CA bundle, not extra trust/distrust entries
+            # which the Python/OpenSSL runtime may preload into its store.
+            certificates = re.findall(r'-----BEGIN CERTIFICATE-----.*?-----END CERTIFICATE-----',
+                                      config.upstream_ca.read_text(encoding='ascii'), re.DOTALL)
+            metadata['upstream_ca_sha256'] = sorted(
+                hashlib.sha256(ssl.PEM_cert_to_DER_cert(cert)).hexdigest() for cert in certificates)
+        metadata['upstream_server_name'] = config.upstream_server_name
+    return listener, upstream, metadata
 
 
 class FileLock:
@@ -276,8 +344,13 @@ async def read_message(reader, config, *, response=False):
         if name in headers:
             raise ProtocolError('duplicate_header')
         headers[name] = value.strip()
-    if any(key in headers for key in ('transfer-encoding', 'upgrade', 'expect', 'trailer')):
+    if any(key in headers for key in ('transfer-encoding', 'expect', 'trailer')):
         raise ProtocolError('unsupported_framing')
+    if 'upgrade' in headers:
+        if response or not config.enable_websocket or headers['upgrade'].lower() != b'websocket':
+            raise ProtocolError('unsupported_framing')
+        if not first.startswith(b'GET ') or headers.get('content-length', b'0') != b'0':
+            raise ProtocolError('unsupported_websocket_body')
     if not response and not headers.get('host'):
         raise ProtocolError('host_required')
     length_raw = headers.get('content-length', b'')
@@ -301,13 +374,25 @@ async def read_message(reader, config, *, response=False):
 
 def counter_set():
     return dict(observed=0, captured=0, dropped=0, storage_errors=0, truncated=0,
-                decoder_errors=0, upstream_errors=0, connection_rejections=0)
+                decoder_errors=0, upstream_errors=0, connection_rejections=0, tls_errors=0,
+                http_transactions=0, websocket_handshakes=0, websocket_frames=0, websocket_events=0)
 
 
 class Relay:
     def __init__(self, config):
         config.validate()
         self.config = config
+        self.websocket_connections = {}
+        self.websocket_module = None
+        if config.enable_websocket:
+            spec = importlib.util.spec_from_file_location('p2_websocket_relay', Path(__file__).with_name('websocket_relay.py'))
+            self.websocket_module = importlib.util.module_from_spec(spec)
+            try:
+                spec.loader.exec_module(self.websocket_module)
+            except ImportError:
+                raise ValueError('websocket_dependency_required:install_p2_requirements') from None
+        self.supported_scope = SCOPE + ('; RFC6455 WS frames, no extensions/subprotocols' if config.enable_websocket else '')
+        self.listener_ssl_context, self.upstream_ssl_context, self.tls_config = tls_contexts(config)
         self.store = Store(config.db)
         self.session_id = uid()
         self.server = None
@@ -342,7 +427,9 @@ class Relay:
                           active_recording=self.active_recording, last_recording=self.last_recording,
                           counters=self.counters, last_error=self.last_error,
                           active_connections=len(self.tasks), capture_queue_depth=self.queue.qsize(),
-                          supported_scope=SCOPE, app_routing_verified=False, attribution='unverified'))
+                          supported_scope=self.supported_scope, app_routing_verified=False, attribution='unverified',
+                          tls=self.tls_config, websocket_enabled=self.config.enable_websocket,
+                          websocket_connections=self.websocket_connections))
 
     def _count(self, name, record=None):
         self.counters[name] += 1
@@ -382,8 +469,16 @@ class Relay:
                     size=len(raw), stored_size=len(stored), truncated=truncated,
                     timestamp=now(), monotonic=time.monotonic())
 
-    def _begin(self, request, connection_id, accepted_at):
+    def _observe_kind(self, kind):
+        key = {'http_transaction': 'http_transactions', 'websocket_handshake': 'websocket_handshakes',
+               'websocket_frame': 'websocket_frames'}.get(kind, 'websocket_events')
+        self.counters[key] += 1
+        if self.active_recording is not None:
+            self.active_recording['counters'][key] += 1
         self._count('observed', self.active_recording)
+
+    def _begin(self, request, connection_id, accepted_at, *, kind='http_transaction'):
+        self._observe_kind(kind)
         record = self.active_recording
         if record is None:
             return None
@@ -395,12 +490,45 @@ class Relay:
                       event_id=uid(),
                       session_id=self.session_id, run_id=None, connection_id=connection_id,
                       sequence=record['counters']['captured'], timestamp=now(), monotonic=time.monotonic(),
-                      kind='http_transaction', transport='TCP', protocol='HTTP/1.1', parser_version=PARSER,
+                      kind=kind, transport='TLS' if self.listener_ssl_context or self.upstream_ssl_context else 'TCP',
+                      protocol='HTTP/1.1', parser_version=PARSER, tls=self._tls_metadata(),
+                      capture_mode='decrypted' if self.listener_ssl_context or self.upstream_ssl_context else 'plaintext',
                       endpoint=dict(host=self.config.host, port=self.config.upstream_port),
                       context_before_recording=accepted_at < record['monotonic_start'],
                       request=self._message(request, 'client_to_upstream', record), response=None,
                       incomplete=True, error=None, received_after_stop=False)
         self.pending[packet['packet_id']] = (packet, record)
+        self._emit(packet, record)
+        return packet
+
+    def _capture_ws(self, connection_id, accepted_at, kind, raw, direction, metadata, error=None):
+        # Independent frame/event admission: never enter HTTP response drain.
+        self._observe_kind(kind)
+        record = self.active_recording
+        if record is None:
+            return None
+        if record['counters']['captured'] >= self.config.max_transactions:
+            self._count('dropped', record)
+            return None
+        self._count('captured', record)
+        message = self._message(raw, direction, record) if direction else None
+        tls = metadata.get('tls', self._tls_metadata())
+        packet = dict(schema_version=VERSION, packet_id=uid(), recording_id=record['recording_id'],
+                      event_id=uid(), session_id=self.session_id, run_id=None, connection_id=connection_id,
+                      sequence=record['counters']['captured'], timestamp=now(), monotonic=time.monotonic(),
+                      kind=kind, transport='TLS' if self.listener_ssl_context or self.upstream_ssl_context else 'TCP',
+                      protocol='WebSocket/13', parser_version='websockets/16.0-frame-adapter/1', tls=tls,
+                      capture_mode='decrypted' if self.listener_ssl_context or self.upstream_ssl_context else 'plaintext',
+                      endpoint=dict(host=self.config.host, port=self.config.upstream_port),
+                      context_before_recording=accepted_at < record['monotonic_start'],
+                      direction=direction, websocket=clone(metadata),
+                      request=message if direction == 'client_to_upstream' else None,
+                      response=message if direction == 'upstream_to_client' else None,
+                      incomplete=error is not None, error=error, received_after_stop=False)
+        message_start = metadata.get('message_started_monotonic')
+        packet['message_context_before_recording'] = message_start is not None and message_start < record['monotonic_start']
+        if error or packet['message_context_before_recording']:
+            record['network_coverage'] = 'partial'
         self._emit(packet, record)
         return packet
 
@@ -421,6 +549,26 @@ class Relay:
         packet['completed_at'] = now()
         self._emit(packet, record)
 
+    async def _open_upstream(self):
+        options = dict(limit=self.config.max_header_bytes)
+        if self.upstream_ssl_context is not None:
+            options.update(ssl=self.upstream_ssl_context,
+                           server_hostname=self.config.upstream_server_name,
+                           ssl_handshake_timeout=self.config.io_timeout,
+                           ssl_shutdown_timeout=min(self.config.io_timeout, 0.5))
+        return await asyncio.open_connection(self.config.host, self.config.upstream_port, **options)
+
+    def _tls_metadata(self, client_writer=None, upstream_writer=None):
+        value = clone(self.tls_config)
+        client = client_writer.get_extra_info('ssl_object') if client_writer else None
+        upstream = upstream_writer.get_extra_info('ssl_object') if upstream_writer else None
+        value.update(client_version=client.version() if client else None,
+                     upstream_version=upstream.version() if upstream else None,
+                     upstream_verified=bool(upstream), upstream_peer_sha256=None)
+        if upstream:
+            value['upstream_peer_sha256'] = hashlib.sha256(upstream.getpeercert(binary_form=True)).hexdigest()
+        return value
+
     def _accept(self, reader, writer):
         if self.relay_state != 'on' or len(self.tasks) >= self.config.max_connections:
             self._count('connection_rejections', self.active_recording)
@@ -435,14 +583,27 @@ class Relay:
         upstream = None
         connection_id = uid()
         accepted_at = time.monotonic()
-        stage = 'request'
+        stage = 'tls' if self.listener_ssl_context else 'request'
         try:
+            if self.listener_ssl_context is not None:
+                # Track the TCP connection before TLS, so OFF also owns clients
+                # which never send ClientHello. No global trust/proxy changes.
+                await writer.start_tls(self.listener_ssl_context,
+                                       ssl_handshake_timeout=self.config.io_timeout,
+                                       ssl_shutdown_timeout=min(self.config.io_timeout, 0.5))
+            stage = 'request'
             request = await asyncio.wait_for(read_message(reader, self.config), self.config.io_timeout)
+            if self.websocket_module and self.websocket_module.is_websocket_request(request):
+                await self.websocket_module.relay_websocket(self, reader, writer, request, connection_id, accepted_at)
+                return
             packet = self._begin(request, connection_id, accepted_at)
+            if packet:
+                packet['tls'] = self._tls_metadata(writer)
             stage = 'upstream'
             async with asyncio.timeout(self.config.io_timeout):
-                upstream_reader, upstream = await asyncio.open_connection(self.config.host, self.config.upstream_port,
-                                                                         limit=self.config.max_header_bytes)
+                upstream_reader, upstream = await self._open_upstream()
+                if packet:
+                    packet['tls'] = self._tls_metadata(writer, upstream)
                 # Force close on the actual forwarded request. Capture retains client wire bytes.
                 lines = request.split(b'\r\n\r\n', 1)
                 head = b'\r\n'.join(line for line in lines[0].split(b'\r\n') if not line.lower().startswith(b'connection:'))
@@ -458,8 +619,13 @@ class Relay:
             raise
         except (OSError, TimeoutError, ProtocolError) as exc:
             record = self.pending.get(packet['packet_id'], (None, None))[1] if packet else self.active_recording
-            error = str(exc) if isinstance(exc, ProtocolError) else ('timeout' if isinstance(exc, TimeoutError) else 'connection_error')
+            error = ('certificate_verification_failed' if isinstance(exc, ssl.SSLCertVerificationError)
+                     else 'tls_error' if isinstance(exc, ssl.SSLError)
+                     else str(exc) if isinstance(exc, ProtocolError)
+                     else 'timeout' if isinstance(exc, TimeoutError) else 'connection_error')
             self.last_error = stage + ':' + error
+            if stage == 'tls' or isinstance(exc, ssl.SSLError):
+                self._count('tls_errors', record)
             if stage == 'request':
                 self._count('decoder_errors', record)
             elif stage == 'upstream':
@@ -467,7 +633,7 @@ class Relay:
                 if isinstance(exc, ProtocolError):
                     self._count('decoder_errors', record)
             self._finish(packet, error=stage + ':' + error)
-            if stage != 'client':
+            if stage not in ('client', 'tls'):
                 code = b'400 Bad Request' if stage == 'request' else b'502 Bad Gateway'
                 writer.write(b'HTTP/1.1 ' + code + b'\r\nContent-Length: 0\r\nConnection: close\r\n\r\n')
                 try:
@@ -571,13 +737,17 @@ class Relay:
             record = dict(schema_version=VERSION, recording_id=uid(), session_id=self.session_id, run_id=None,
                           event_id=uid(), timestamp=now(), started_at=now(), monotonic_start=time.monotonic(),
                           status='recording', network_coverage='unknown' if self.relay_state == 'on' else 'none',
-                          supported_scope=SCOPE, parser_version=PARSER, counters=counter_set(), gaps=[],
+                          supported_scope=self.supported_scope, parser_version=PARSER, counters=counter_set(), gaps=[],
                           attribution=dict(device_id=payload['device_id'], app_id=payload['app_id'], confidence='unverified',
                                            method='explicit_synthetic_labels', limitations=['No device routing or app identity verified']),
                           config=dict(record_stop_response_drain_ms=self.config.record_stop_response_drain_ms,
                                       relay_off_drain_ms=self.config.relay_off_drain_ms,
                                       capture_body_bytes=self.config.capture_body_bytes,
-                                      max_transactions=self.config.max_transactions))
+                                      max_transactions=self.config.max_transactions, tls=clone(self.tls_config),
+                                      enable_websocket=self.config.enable_websocket,
+                                      max_websocket_frame_bytes=self.config.max_websocket_frame_bytes,
+                                      max_websocket_message_bytes=self.config.max_websocket_message_bytes,
+                                      websocket_idle_timeout=self.config.websocket_idle_timeout))
             if self.relay_state == 'off':
                 record['gaps'].append(dict(reason='relay_off', started_at=now()))
             await self.store.record(record)
@@ -593,6 +763,12 @@ class Relay:
                 return dict(recording_id=self.last_recording['recording_id'] if self.last_recording else None, status='idle')
             record = self.active_recording
             self.active_recording = None  # seal without awaiting storage or drain
+            record['websocket_at_stop'] = clone(self.websocket_connections)
+            if any(state.get('frame_in_progress') or state.get('message_id')
+                   for connection in self.websocket_connections.values()
+                   for state in connection.get('directions', {}).values()):
+                record['network_coverage'] = 'partial'
+                record['gaps'].append(dict(reason='websocket_incomplete_at_stop', timestamp=now()))
             record.update(status='stopping', stop_requested_at=now(), monotonic_stop=time.monotonic(), stop_marker_id=uid())
             deadline = asyncio.get_running_loop().time() + self.config.record_stop_response_drain_ms / 1000
             while self.pending and asyncio.get_running_loop().time() < deadline:
@@ -656,7 +832,10 @@ class Relay:
 
 
 async def serve(args):
-    relay = Relay(Config(db=args.db, upstream_port=args.upstream_port, listen_port=args.port))
+    relay = Relay(Config(db=args.db, upstream_port=args.upstream_port, listen_port=args.port,
+                         listener_cert=args.listener_cert, listener_key=args.listener_key,
+                         upstream_tls=args.upstream_tls, upstream_ca=args.upstream_ca,
+                         upstream_server_name=args.upstream_server_name, enable_websocket=args.websocket))
     await relay.start()
     async def output(value):
         # A stalled terminal blocks its own thread, never socket forwarding.
@@ -696,6 +875,12 @@ def main():
     run.add_argument('--db', type=Path, required=True)
     run.add_argument('--upstream-port', type=int, required=True)
     run.add_argument('--port', type=int, default=8780)
+    run.add_argument('--listener-cert', type=Path)
+    run.add_argument('--listener-key', type=Path)
+    run.add_argument('--upstream-tls', action='store_true')
+    run.add_argument('--upstream-ca', type=Path)
+    run.add_argument('--upstream-server-name', default='localhost')
+    run.add_argument('--websocket', action='store_true', help='Capture RFC6455 traffic frames (requires P2 requirements)')
     view = sub.add_parser('query')
     view.add_argument('--db', type=Path, required=True)
     view.add_argument('--kind', choices=('recordings', 'packets', 'detail'), default='recordings')

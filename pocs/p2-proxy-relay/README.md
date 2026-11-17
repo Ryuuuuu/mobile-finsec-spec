@@ -1,6 +1,6 @@
-# P2 — 독립 HTTP 릴레이 기록 PoC
+# P2 — 독립 HTTP(S)·WS(S) 릴레이 기록 PoC
 
-Python 표준 라이브러리만으로 합성 HTTP 요청을 실제 upstream에 전달하고, RECORD~STOP 구간의 논리 요청/응답을 SQLite에 저장·조회합니다. P1, Appium, 실제 기기, 최종 GPUI 화면, AI 및 점검 실행과 독립입니다. 이 PoC는 보안 항목의 양호/취약 판정을 생성하지 않습니다.
+고정 localhost upstream으로 합성 HTTP(S) 요청과 opt-in WS(S) 프레임을 실제 전달하고, RECORD~STOP 구간의 논리 요청/응답·프레임·연결 이벤트를 SQLite에 저장·조회합니다. P1, Appium, 실제 기기, 최종 GPUI 화면, AI 및 점검 실행과 독립입니다. 이 PoC는 보안 항목의 양호/취약 판정을 생성하지 않습니다.
 
 - [구현 전 실행 명세](docs/EXECUTION-SPEC.md)
 - [Windows 합성 실행 가이드](docs/WINDOWS.md)
@@ -8,10 +8,11 @@ Python 표준 라이브러리만으로 합성 HTTP 요청을 실제 upstream에 
 
 ## 실행
 
-Python **3.11 이상**이 필요합니다. 별도 패키지 설치는 없습니다. 아래 명령은 이 폴더에서 실행합니다. Windows에서는 `python` 대신 `py -3`을 사용할 수 있습니다.
+Python **3.11 이상**이 필요합니다. HTTP/TLS 경로는 표준 라이브러리이며 WS는 고정된 `websockets==16.0` codec을 사용합니다. 전체 테스트는 OpenSSL CLI도 필요합니다. 인증서는 테스트 실행 때 임시 폴더에 생성합니다. 아래 명령은 이 폴더에서 실행합니다. Windows에서는 `python` 대신 `py -3`을 사용할 수 있습니다.
 
 ```text
 python --version
+python -m pip install -r requirements.txt
 python -m unittest discover -s tests -v
 ```
 
@@ -50,7 +51,7 @@ python relay.py query --db runtime/capture.sqlite3 --kind detail --packet-id "<p
 
 릴레이 터미널에 JSON 대신 `QUIT` 한 줄을 입력하면 기록 마감·연결 정리·저장 완료 후 종료합니다. 종료 후에도 같은 DB를 조회할 수 있습니다. 다음 시험에서는 `demo2-on`처럼 **새 command ID**를 사용합니다.
 
-## 지원 프로토콜과 전달 범위
+## 기본 HTTP 전달 범위
 
 경로는 `합성 client → 127.0.0.1 relay → 고정 127.0.0.1 upstream`입니다. `--upstream-port`로 목적지를 고정하며, 요청의 Host나 URL로 임의 목적지를 선택하지 않습니다. 모든 listener는 IPv4 loopback에만 바인딩합니다.
 
@@ -59,9 +60,9 @@ python relay.py query --db runtime/capture.sqlite3 --kind detail --packet-id "<p
 - 응답은 최종 HTTP/1.1 응답과 명시적 Content-Length가 필요합니다. body 없는 응답도 `Content-Length: 0`을 사용합니다.
 - 연결당 요청/응답 한 쌍만 처리하고 닫습니다. upstream으로 전달할 요청에는 `Connection: close`를 적용합니다. 저장된 요청 원문은 relay가 client에서 받은 바이트입니다.
 - TCP 조각이 나뉘어 도착해도 framing을 완료한 뒤 논리 메시지로 취급합니다. 저장 API의 `packet`은 `kind=http_transaction`인 요청/응답 묶음이며 TCP packet/chunk 개수가 아닙니다.
-- 중복 header, Transfer-Encoding, Expect, Upgrade, Trailer, 비정상 framing 등은 거부합니다. 일반 HTTP 구현보다 좁은 지원 범위입니다.
+- 중복 header, Transfer-Encoding, Expect, Trailer, 비정상 framing 등은 거부합니다. Upgrade는 `--websocket`을 켠 RFC6455 경로에서만 허용합니다. 일반 HTTP 구현보다 좁은 지원 범위입니다.
 
-**미지원**: TLS 복호화·인증서/CA, HTTPS upstream, 범용 HTTP CONNECT proxy, HTTP/2·3, QUIC/UDP, chunked·close-delimited body, interim response, keep-alive/pipelining, WebSocket, replay/변조, 실제 앱 라우팅 및 앱별 attribution. 여러 요청을 한 연결에 보내는 fixture로 전체 수집을 기대하면 안 됩니다. 네트워크/보안 설정이나 기기 trust를 변경하지 않습니다.
+**미지원**: 범용 HTTP CONNECT proxy, 동적 CA lifecycle, HTTP/2·3, QUIC/UDP, chunked·close-delimited body, interim response, HTTP keep-alive/pipelining, replay/변조, 실제 앱 라우팅 및 앱별 attribution. 여러 요청을 한 연결에 보내는 fixture로 전체 수집을 기대하면 안 됩니다. 네트워크/보안 설정이나 기기 trust를 변경하지 않습니다.
 
 Hawkeye는 저장소의 [검토 문서](../../docs/05-hawkeye-review.md)에서 구조와 제약을 참고했습니다. 원본 프로젝트에 접근하거나 소스를 복사·재사용하지 않았습니다.
 
@@ -71,7 +72,7 @@ Hawkeye는 저장소의 [검토 문서](../../docs/05-hawkeye-review.md)에서 �
 | --- | --- |
 | `process_state=running` | 서비스 프로세스와 명령 처리가 실행 중 |
 | `relay_state=on` | listener 준비 완료; 실제 앱 트래픽 경유를 뜻하지 않음 |
-| `counters.observed` | 지원 요청을 완전히 파싱한 수; 저장 성공 수와 다름 |
+| `counters.observed` | 지원 HTTP transaction/WS handshake·frame·lifecycle의 관찰 수; 저장 성공 수와 다름 |
 | 저장 목록/상세 | 실제 영속화된 transaction과 payload 확인 |
 | `attribution=unverified`, `app_routing_verified=false` | device/app ID는 합성 라벨이며 실제 귀속은 미검증 |
 
@@ -106,5 +107,75 @@ relay 전달 경로는 디스크·조회·AI를 기다리지 않고 bounded queu
 - 명령의 상태 변경과 결과 저장은 하나의 원자적 transaction이 아닙니다. 그 사이 crash가 발생하면 exactly-once를 보장하지 않습니다. 같은 프로세스에서는 적용 결과와 오류를 메모리에 보관하여 같은 ID 재시도로 중복 실행하지 않습니다. 실패 결과 cache는 최대 128개이며 가득 차면 신규 변경 명령을 `command_recovery_required`로 거부합니다. 오류 후에는 STATUS와 저장 기록을 확인해야 합니다.
 - 디스크 오류는 메모리 상태에 표시하지만, 영구 저장 불가 시 오류 자체의 디스크 보존도 보장하지 못합니다. 저장된 진행 중 metadata는 최신 메모리 counters보다 늦을 수 있습니다.
 - 단일 요청/연결/queue의 한도와 별도로 DB 전체 용량·보존 기간·자동 삭제 정책은 구현하지 않았습니다. OS/장치 전원 장애 내구성, 장시간 부하, 영구 파일시스템 stall은 미검증입니다.
-- Windows 실행과 파일 잠금, Android/iOS/웹 실제 트래픽 경유, TLS·프로토콜 확장은 별도 검증 대상입니다. 이 PoC의 cloud loopback 성공을 실기기 성공으로 해석하지 않습니다.
+- Windows 실행과 파일 잠금, Android/iOS/웹 실제 트래픽 경유, 일반 CONNECT/동적 CA·프로토콜 확장은 별도 검증 대상입니다. 이 PoC의 cloud loopback 성공을 실기기 성공으로 해석하지 않습니다.
 - runtime DB·sidecar·lock은 Git에서 제외합니다. 실제 사용자/기기 데이터, 계정·토큰·인증서·키·실제 패킷은 이 공개 저장소에 추가하지 않습니다. 예제는 공개 합성 값만 사용합니다.
+
+
+## HTTPS와 실제 WebSocket/WSS
+
+이번 확장은 Hawkeye가 HTTPS와 WebSocket을 지원했다는 사용자 요구를 반영한 독립 구현입니다.
+이번 원본 조사는 환경 초기화 오류로 코드를 읽지 못했으며, Hawkeye 원본 재사용은 없습니다.
+GUI 이벤트 전송용 WS가 아닌 실제 localhost client/upstream 사이 트래픽을 수집합니다.
+
+|경로|설정과 수집 의미|
+|---|---|
+|HTTP|기존 기본 동작, 연결당 제한 HTTP/1.1 transaction 하나|
+|HTTPS|명시적 listener cert/key로 TLS 종단, upstream TLS는 검증 활성; 복호화된 HTTP 저장|
+|WS|`--websocket`, HTTP Upgrade 및 양방향 RFC6455 frame/lifecycle 수집|
+|WSS|WS와 listener/upstream TLS 결합; 복호화된 WS wire frame 저장|
+|CONNECT/암호화 tunnel|미지원; 터널 바이트를 평문 수집 성공으로 표시하지 않음|
+
+TLS listener와 upstream은 각각 선택합니다. 한쪽만 TLS인 경우에도 `tls.listener_enabled`와
+`tls.upstream_enabled`, negotiated version, `upstream_verified`로 각 leg를 구분합니다.
+`transport=TLS`는 한쪽 이상이 TLS임을 뜻하며 양쪽 TLS 보장을 뜻하지 않습니다.
+`capture_mode=decrypted`는 TLS record가 아닌 애플리케이션 평문을 수집한다는 뜻입니다.
+
+아래는 **이미 준비한 테스트 전용** 인증서 파일과 localhost upstream을 사용하는 실행 예시입니다.
+일반 기기/브라우저 프록시 설정으로 쓰는 명령이 아닙니다. 자동 재현은 전체 unittest에 포함됩니다.
+
+```text
+python relay.py serve --db runtime/tls.sqlite3 --port 8780 --upstream-port 8790 --listener-cert runtime/relay-cert.pem --listener-key runtime/relay-key.pem --upstream-tls --upstream-ca runtime/test-ca.pem --upstream-server-name localhost --websocket
+```
+
+client는 테스트 relay 인증서를 전용 SSLContext에서 명시적으로 신뢰해야 합니다. upstream은
+기본 체인/만료/호스트 이름 검증을 적용하고, `--upstream-ca`를 생략하면 시스템 기본 신뢰를
+읽습니다. 검증 실패를 자동 무시하거나 평문으로 재접속하지 않습니다. TLS1.2 이상이며 ALPN은
+HTTP/1.1만 제안합니다. `SSLKEYLOGFILE` 환경변수로 키 기록을 켜지 않습니다. TLS 설정 snapshot은
+버전·모드·설정 CA/인증서 fingerprint만 포함하며 PEM, 개인 키, 파일 경로는 출력하지 않습니다.
+
+OS trust store, OS proxy, 기기 설정은 바꾸지 않습니다. 동적 MITM CA 생성/설치/회전, pinning
+우회, 실제 앱 routing/attribution은 지원하지 않습니다. 테스트 인증서 생성 helper는 테스트용이며
+제품 CA lifecycle을 제공하지 않습니다.
+
+## WS 데이터와 기록 경계
+
+- `kind=http_transaction / websocket_handshake / websocket_frame / websocket_open / websocket_close`를
+  구분합니다. `captured`/`persisted_packets`는 전체 row 수이며 HTTP 요청 수가 아닙니다.
+  종류별 observed counter는 `http_transactions`, `websocket_handshakes`, `websocket_frames`,
+  `websocket_events`에 있습니다. 같은 handshake의 request/response 갱신은 row 하나입니다.
+- frame 상세의 request 또는 response 슬롯 하나에 **원본 WS wire frame**을 넣습니다. masking key와
+  header를 포함한 bytes이며 TLS record나 unmasked payload가 아닙니다. 방향, opcode, FIN,
+  message ID/fragment 순서, frame 순번, unmasked payload의 size/hash를 별도 metadata로 저장합니다.
+  저장 prefix 한도를 넘으면 wire bytes가 절단되며 전체 원문 복원을 주장하지 않습니다.
+- text/binary/continuation/ping/pong/close를 지원합니다. TCP read chunk와 frame, frame과 message를
+  구분합니다. split UTF-8은 message 단위로 검증하지만 실제 frame byte 경계는 그대로 보존합니다.
+  peer의 ping/pong/close를 전달하며 relay가 가짜 제어 프레임을 추가하지 않습니다.
+- WS frame은 완전히 읽고 검증한 순간 현재 recording에 귀속합니다. STOP 뒤 frame/close는 기존
+  기록에 추가하지 않습니다. HTTP handshake 응답만 기존 HTTP drain 규칙을 사용합니다.
+  STOP은 WS 연결을 종료하지 않으며 같은 연결에서 다음 RECORD를 시작할 수 있습니다.
+- `websocket_at_stop`은 열린 연결/부분 frame/fragmented message snapshot입니다. 부분 frame 또는
+  미완료 message는 partial입니다. 이전 구간에서 시작한 message의 continuation은
+  `message_context_before_recording=true`로 표시하고 partial로 둡니다. 앞선 연결/handshake context는
+  `context_before_recording`으로 표시합니다. STOP 이후 늦은 데이터로 snapshot을 갱신하지 않습니다.
+- OFF는 listener와 TLS handshake 및 양방향 pump를 소유하고 bounded drain 후 취소·join합니다.
+  정상 close handshake와 abrupt EOF, invalid frame, timeout, 강제 OFF 종료를 구분합니다.
+
+WS 기본 frame/message 한도는 각각 1 MiB, frame 조립/쓰기 제한은 `io_timeout` 2초,
+방향별 idle timeout은 30초입니다. 저장 queue 128, recording 전체 row 1,000 한도는 동일합니다.
+설정 한도는 Python Config에 있고 CLI는 TLS/WS 활성화 옵션만 제공합니다. 느린 소비자의 backpressure는
+해당 연결에만 적용됩니다. 장시간/대규모 트래픽 처리 성능은 미검증입니다.
+
+extensions(압축 포함), subprotocol negotiation, HTTP/2 extended CONNECT·HTTP/3·QUIC, 일반 forward
+proxy, HTTP keep-alive/chunked는 미지원으로 거부합니다. 제한된 codec adapter는 고정 버전의
+`Frame.parse` 메서드에 의존하므로 라이브러리 교체 시 회귀 검증이 필요합니다. P4는 기존 HTTP
+기본 인터페이스 회귀만 검증하며 P4의 WSS 통합 지원을 주장하지 않습니다.

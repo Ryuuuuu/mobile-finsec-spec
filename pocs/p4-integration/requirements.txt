@@ -1,1 +1,2 @@
 -r ../p3-android-os-tamper/requirements.txt
+-r ../p2-proxy-relay/requirements.txt

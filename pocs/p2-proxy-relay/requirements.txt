@@ -1,0 +1,2 @@
+# Frame codec and handshake validation. No protocol code is vendored.
+websockets==16.0

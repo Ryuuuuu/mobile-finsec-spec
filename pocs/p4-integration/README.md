@@ -5,7 +5,7 @@ Python supervisor가 단일 합성 기기에서 fake main/item provider와 **기
 실행한 검증과 결과는 [검증 보고서](docs/VALIDATION.md)에 별도로 기록한다.
 
 **P1, GPUI/gpui-kit, 실제 모델, 실기기 통합은 미검증**이다. P1의 별도 Android CLI
-3회 성공은 GUI 기록 검증이나 P4 성공을 뜻하지 않는다. P2 38개/P3 58개 기존 테스트도
+3회 성공은 GUI 기록 검증이나 P4 성공을 뜻하지 않는다. P2 최초 HTTP 38개/P3 58개 기존 테스트도
 제한된 synthetic 검증이다. 사용자 PC·GUI·실기기를 사용하지 않는다.
 
 ## 구성과 경계
@@ -121,3 +121,8 @@ thread가 끝났다고 간주하지 않는다. thread나 cleanup task가 남으�
 
 실데이터, 고객/사용자 기기 정보, 실제 packet·계정·인증정보를 추가하지 않는다.
 최종 제품의 RUN/AI 수용기준 전체를 통과한 구현이 아니라 제한된 최소 결합 PoC다.
+
+
+P2의 후속 TLS/WS 확장 이후에도 이 adapter는 기본 HTTP 경로를 사용합니다. P4 requirements는
+P2의 고정 WS codec 의존성도 연결하지만, P4 자체의 HTTPS/WSS 시나리오를 검증했다는 뜻은
+아닙니다. 확장 검증은 [P2 보고서](../p2-proxy-relay/docs/VALIDATION.md)를 참조합니다.

@@ -118,4 +118,4 @@ P4를 repo 루트에서 처음 실행한 경우 import 경로 오류 2개가 있
 
 공식 참고: [Python SSL](https://docs.python.org/3.12/library/ssl.html),
 [asyncio streams](https://docs.python.org/3.12/library/asyncio-stream.html),
-[websockets Sans-I/O](https://websockets.readthedocs.io/en/stable/reference/sansio/common.html).
+[websockets Sans-I/O](https://websockets.readthedocs.io/en/16.0/reference/sansio/server.html).

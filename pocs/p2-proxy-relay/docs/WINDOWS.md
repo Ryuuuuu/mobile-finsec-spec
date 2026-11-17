@@ -2,7 +2,7 @@
 
 이 문서는 **Windows에서 이후 사용자가 실행할 절차**입니다. Windows 실행·실기기 인수시험의 통과를 뜻하지 않습니다. 실제 수행한 cloud 검증은 [VALIDATION.md](VALIDATION.md)에 구분해서 기록합니다.
 
-Python 3.11 이상만 필요하며 추가 패키지는 없습니다. 이 절차는 같은 PC의 `127.0.0.1` 합성 통신만 사용합니다. 기기 연결, Appium, 관리자 권한, CA 설치, 프록시/방화벽 설정 변경은 필요하지 않습니다. `fixture.py`를 대상으로만 실행합니다.
+아래 수동 HTTP fixture는 Python 3.11 이상만 필요합니다. 전체 TLS/WS 자동 시험은 `requirements.txt`의 websockets와 OpenSSL CLI가 추가로 필요합니다. 이 절차는 같은 PC의 `127.0.0.1` 합성 통신만 사용합니다. 기기 연결, Appium, 관리자 권한, CA 설치, 프록시/방화벽 설정 변경은 필요하지 않습니다. `fixture.py`를 대상으로만 실행합니다.
 
 ## 1. 폴더와 Python 확인
 
@@ -134,9 +134,11 @@ py -3 relay.py query --db runtime/capture.sqlite3 --kind detail --packet-id $pac
 모든 수동 프로세스를 종료한 뒤 다음 명령으로 독립 자동 시험을 실행할 수 있습니다. 테스트는 임시 DB와 합성 loopback 서버를 사용합니다.
 
 ```powershell
+py -3 -m pip install -r requirements.txt
+openssl version
 py -3 -m unittest discover -s tests -v
 ```
 
 자동 시험은 20건 전달·기록, RECORD/STOP/OFF 경계, 반복 명령, 오류·손실 및 재시작 조회 등을 확인합니다. 실제 시험 항목과 최종 결과는 [검증 기록](VALIDATION.md)을 기준으로 합니다. Windows에서는 출력된 통과/실패를 직접 확인해야 하며 cloud 결과로 대체하지 않습니다.
 
-Android/iOS/웹 앱 라우팅, 선택 앱 귀속, TLS/인증서, HTTP/2·QUIC 및 실제 기기에서의 연결 정리는 이번 프로그램이 구현·검증한 범위가 아닙니다. 향후 각각 별도 명세와 승인을 갖춘 검증이 필요합니다. 현재 안내만으로 실제 앱의 시스템 프록시나 CA 설정을 변경하지 않습니다.
+TLS/HTTPS/WS/WSS localhost 검증은 cloud에서 수행하며 Windows TLS/WS 실행은 미검증입니다. 테스트 인증서는 실행 중 임시 폴더에 생성하며 OS trust store에 설치하지 않습니다. Android/iOS/웹 앱 라우팅, 선택 앱 귀속, 제품 CA lifecycle, HTTP/2·QUIC 및 실제 기기에서의 연결 정리는 구현·검증 범위가 아닙니다. 향후 각각 별도 명세와 승인을 갖춘 검증이 필요합니다. 현재 안내만으로 실제 앱의 시스템 프록시나 CA 설정을 변경하지 않습니다.
