@@ -6,6 +6,20 @@ from .adapter import Appium, Uncertain, TargetNotForeground
 from .core import Engine, Lease, Journal, atomic
 from . import protocol as p
 
+def tap_resource(xml,x,y,package):
+    hits=[]
+    for node in ET.fromstring(xml).iter():
+        # Resource identity alone does not make a container an input target.
+        if node.get('clickable')!='true' or node.get('enabled')=='false':continue
+        rid=node.get('resource-id','')
+        try:p.resource(rid,package)
+        except ValueError:continue
+        bounds=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',node.get('bounds',''))
+        if bounds:
+            l,t,r,b=map(int,bounds.groups())
+            if l<=x<r and t<=y<b:hits.append(((r-l)*(b-t),rid))
+    return min(hits)[1] if hits else None
+
 class Window:
     def __init__(self,root,args):
         self.root=root; self.args=args; self.tasks=queue.Queue(); self.answers=queue.Queue()
@@ -154,8 +168,10 @@ class Window:
     def stop(self):
         if self.engine.mode!='recording': self.status.set('No active recording'); return
         # Stop marks the boundary now; current action is conservatively incomplete if still running.
-        if self.busy:
+        if self.busy and not self.observing:
             self.engine.stop_requested(); self.status.set('STOP requested: active action drains as incomplete'); return
+        # Preview reads are not input: discard undispatched input, then finish after the read.
+        if self.observing:self.pending_input=None
         self.engine.stop_requested()
         self.submit(self.engine.finish,lambda _:self.status.set('Saved '+str(self.engine.j.path/'route.json')))
     def cancel(self):
@@ -260,15 +276,8 @@ class Window:
             swipe=abs(end[0]-start[0])+abs(end[1]-start[1])>.035
             if swipe:a={'type':'swipe','point':start,'end':end,'geometry':g}
             else:
-                hits=[]; x=start[0]*g['width']; y=start[1]*g['height']
-                for node in ET.fromstring(self.frame.get('xml','<empty/>')).iter():
-                    rid=node.get('resource-id',''); b=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',node.get('bounds',''))
-                    try:p.resource(rid,self.adapter.package)
-                    except ValueError:continue
-                    if b:
-                        l,t,r,bottom=map(int,b.groups())
-                        if l<=x<r and t<=y<bottom:hits.append(((r-l)*(bottom-t),rid))
-                if hits:a['locator']=min(hits)[1]
+                rid=tap_resource(self.frame.get('xml','<empty/>'),start[0]*g['width'],start[1]*g['height'],self.adapter.package)
+                if rid:a['locator']=rid
                 else:a.update(point=start,geometry=g)
             if 'point' in a and (not self.args.allow_coordinates or not self.visible.get()):raise ValueError('Coordinates require --allow-coordinates and visible-frame confirmation')
             self.input(a)

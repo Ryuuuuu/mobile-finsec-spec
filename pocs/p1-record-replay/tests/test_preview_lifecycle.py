@@ -79,6 +79,21 @@ class PreviewLifecycleTest(unittest.TestCase):
             self.assertTrue(w.tasks.empty())
             self.assertIsNone(w.pending_input)
 
+    def test_stop_during_preview_finishes_after_read_without_dispatching_pending_input(self):
+        w=window();w.observing=True;w.engine=Mock(mode='recording')
+        discarded=Mock();w.pending_input=(discarded,None)
+        w.stop()
+        w.engine.stop_requested.assert_called_once()
+        self.assertEqual(w.pending_input[0],w.engine.finish)
+        w.answers.put((None,{},None));w.drain()
+        finish,_=w.tasks.get_nowait();self.assertEqual(finish,w.engine.finish)
+        discarded.assert_not_called()
+
+    def test_stop_during_actual_input_does_not_queue_successful_finish(self):
+        w=window();w.observing=False;w.engine=Mock(mode='recording')
+        w.stop();w.engine.stop_requested.assert_called_once()
+        self.assertTrue(w.tasks.empty());self.assertIsNone(w.pending_input)
+
     def test_hold_selected_during_capture_preserves_displayed_frame(self):
         w = window(); w.visible.get.return_value = True
         previous = w.frame

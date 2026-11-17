@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 from pc import protocol as p
 from pc.adapter import Appium, TargetNotForeground, Uncertain
 from pc.core import Engine
+from pc.ui import tap_resource
 from test_core import Fake
 
 PACKAGE='org.example.qa'
@@ -117,3 +118,12 @@ class GeneralAdapterTest(unittest.TestCase):
     def test_invalid_package(self):
         for value in ['pkg;reboot','../test','org.example/Bad','']:
             with self.assertRaises(ValueError):Appium('QA-SERIAL',value)
+
+class HitTargetTest(unittest.TestCase):
+    def test_nonclickable_content_container_does_not_steal_canvas_tap(self):
+        xml='<hierarchy><node resource-id="android:id/content" clickable="false" bounds="[0,0][100,100]"><node clickable="false" bounds="[10,10][90,90]"/></node></hierarchy>'
+        self.assertIsNone(tap_resource(xml,50,50,PACKAGE))
+    def test_smallest_enabled_clickable_target_wins(self):
+        xml='<hierarchy><node resource-id="android:id/content" clickable="false" bounds="[0,0][100,100]"/><node resource-id="'+ID+'" clickable="true" enabled="true" bounds="[10,10][90,90]"/></hierarchy>'
+        self.assertEqual(tap_resource(xml,50,50,PACKAGE),ID)
+        self.assertIsNone(tap_resource(xml.replace('enabled="true"','enabled="false"'),50,50,PACKAGE))
