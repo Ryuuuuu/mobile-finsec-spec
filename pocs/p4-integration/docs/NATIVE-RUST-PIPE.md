@@ -27,3 +27,5 @@ python pocs/p4-integration/scripts/verify_rust_pipe.py
 This is a separate native gate from `run_structure_tests.py`. Output reports native build, six shared-guard checks, three direct Rust-Python round trips and three invalid-input checks. Temporary executable/PDB/fixtures are removed; no binary, device capture or private evidence is committed.
 
 This now establishes **limited real Rust-Python pipe communication on Windows**. It does not establish Rust HTTP/bootstrap authentication, full start/record/replay workflows from Rust, JSON compatibility beyond these exact fixture messages, a production unsafe-FFI layer, std/Cargo application linking, GPUI dependencies/rendering, Linux compilation, a real model or a device. No inspection skills or judgement logic were added. The existing MSVC/SDK approval blocker remains for the planned normal GPUI build.
+
+A subsequent ordinary std-program link with the bundled linker failed for absent Windows SDK import libraries; see [the follow-up runtime gate](LIVE-RELAY-HANDOFF.md). No broader Rust build capability is inferred from this no_std probe.
