@@ -18,7 +18,7 @@ class UIBridge:
         busy=state['status']=='in_progress' or self.api.supervisor.lease.inspect()['lifecycle']!='free'
         device=self.api.inventory.get('devices',{}).get('synthetic-device-p4',{})
         input_ready=device.get('connection')=='connected' and device.get('authorized') is True and device.get('capabilities',{}).get('mock_input') is True
-        base=dict(execution=state,run_id=rid,events=[],next_cursor=cursor,resync_required=False,
+        base=dict(execution=state,run_id=rid,events=[],next_cursor=cursor,resync_required=False,has_more=False,delivery_error=None,
                   controls={'selection_enabled':not busy,'device_input_enabled':not busy and input_ready,'history_enabled':True,'reason':'RUN_ACTIVE_OR_RECOVERY' if busy else None})
         if rid is None:return self.envelope(generation,**base)
         try:
@@ -27,10 +27,21 @@ class UIBridge:
             for line in lines:
                 if not line.endswith(b'\n'):break  # writer may be between append and flush
                 event=json.loads(line)
-                if event.get('seq')!=len(events)+1:raise ValueError('CURSOR_GAP')
+                if not isinstance(event,dict) or type(event.get('seq')) is not int or event['seq']!=len(events)+1:raise ValueError('CURSOR_GAP')
                 events.append(dict(event,event_id=rid+':'+str(event['seq'])))
             if cursor>len(events):base['resync_required']=True;base['next_cursor']=0
-            else:base.update(events=events[cursor:],next_cursor=len(events))
+            else:
+                page=[];size=0
+                for event in events[cursor:]:
+                    event_size=len(json.dumps(event,allow_nan=False).encode('utf-8'))
+                    if event_size>64*1024:
+                        if not page:base['delivery_error']='EVENT_LIMIT'
+                        break
+                    if len(page)>=64 or size+event_size>64*1024:break
+                    page.append(event);size+=event_size
+                next_cursor=cursor+len(page)
+                base.update(events=page,next_cursor=next_cursor,
+                            has_more=next_cursor<len(events) and base['delivery_error'] is None)
         except FileNotFoundError:pass
         except (OSError,ValueError,TypeError):base['resync_required']=True;base['next_cursor']=0
         return self.envelope(generation,**base)
@@ -58,12 +69,14 @@ class MockUIClient:
         self.project_id=project_id;self.generation=0;self.tab='record';self.events={};self.result=None;self.run_id=None
     def select(self,tab,run_id=None):
         if tab not in ('record','check','results'):raise ValueError('INVALID_TAB')
+        if self.generation>=2**53-1:raise ValueError('GENERATION_OVERFLOW')
         self.tab=tab;self.generation+=1;self.events={};self.result=None;self.run_id=run_id
         return self.generation
     def apply(self,response):
-        if response.get('project_id')!=self.project_id or response.get('request_generation')!=self.generation:return False
+        if not isinstance(response,dict) or response.get('contract')!='mock-ui.v1':return False
+        if response.get('project_id')!=self.project_id or type(response.get('request_generation')) is not int or response.get('request_generation')!=self.generation:return False
         rid=response.get('run_id')
-        if rid is not None and self.run_id is not None and rid!=self.run_id:return False
+        if self.run_id is not None and rid!=self.run_id:return False
         if rid is not None:self.run_id=rid
         if self.tab=='check':
             if response.get('resync_required'):self.events={};return False

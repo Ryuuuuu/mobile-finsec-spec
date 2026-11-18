@@ -35,3 +35,15 @@ The UI bridge does not claim pass/fail assessment completeness: product finalize
 Reproduce via test_ui_bridge.py plus the selected structural suites. Source/test/docs only are public; synthetic temporary data and private execution logs stay outside Git.
 
 Validation on Windows/Python 3.12.10: 89 selected structural tests passed, zero skips. After the final disconnected-input projection adjustment, all 4 mock UI tests passed again. 116 traceability links resolve. Private log p4-ui-bridge-tests.log remains outside Git.
+
+## Integration boundary follow-up: bounded progress pages
+
+Inspection found a mismatch: progress returned all remaining events from a log up to 1 MiB, while UIWire caps a response at 256 KiB. A client repeatedly requesting the same cursor could therefore receive only RESPONSE_LIMIT and never advance. Progress now delivers at most 64 events and 64 KiB of serialized event data per page, with next_cursor and has_more. The client should drain pages while has_more is true, then resume polling; execution state remains independent of log pagination.
+
+A single event exceeding 64 KiB returns delivery_error=EVENT_LIMIT without skipping it or advancing its cursor; has_more is false to prevent a hot retry loop. Show an explicit incomplete-log state and retain authoritative execution/history access. This is not complete large-log support: the existing 1 MiB source-log cap and full-file reread remain, as do bounded result/history payloads. Files beyond that cap still request resync and require a future indexed log store. An incomplete last JSONL line remains pending; malformed scalar/sequence entries now request resync rather than raising an attribute exception.
+
+Python MockUIClient now matches the independent Rust guard on contract/version and selected run identity, rejects boolean generation values and preserves selection on generation overflow. A response without a run ID cannot overwrite a selected run. This guard is not transport authentication or a full payload schema validator. No automatic tab switch is added; recording remains separate from check-item selection.
+
+Validation: 9 Python UI bridge/wire tests passed. A synthetic 150-event log (3,000-character payload per event) was delivered through the actual JSON facade in bounded pages, with each sequence observed exactly once. Tests also cover oversized single events, malformed log entries, stale/absent run IDs, wrong contract, boolean generation and overflow. These are structural mock tests; no device, model, native GPUI or inspection logic was executed.
+
+The explicit full structural runner subsequently passed all 94 tests, zero skips.

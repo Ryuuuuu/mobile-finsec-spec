@@ -23,7 +23,7 @@ Request fields are exactly `contract=mock-ui-request.v1`, `project_id`, `request
 |history|empty object|
 |result|run_id|
 
-Requests/responses are bounded at 256 KiB; duplicate JSON keys, wrong types/versions/project and unexpected fields are rejected. Fixed errors contain no raw exception, input packet or path. An oversized response or service/serialization error reports outcome unknown: a mutation may already have happened. A client must retain the original command ID and query authoritative state, not automatically resubmit with a new ID. The limit means large live histories need future pagination; it is not lossless transport support.
+Requests/responses are bounded at 256 KiB; duplicate JSON keys, wrong types/versions/project and unexpected fields are rejected. Fixed errors contain no raw exception, input packet or path. An oversized response or service/serialization error reports outcome unknown: a mutation may already have happened. A client must retain the original command ID and query authoritative state, not automatically resubmit with a new ID. Live progress now uses bounded pages (see [page contract](UI-CONTRACT-BRIDGE.md)); source logs above 1 MiB and oversized result/history payloads remain unsupported. This is not lossless transport support.
 
 Success uses the existing mock-ui.v1 envelope. Start/inspect/cancel wrap API data; other methods preserve their projection. Packet bodies remain behind the selected mock executor's existing grant, not in automatic screen messages. The existing source-format P1/P2 fixtures are used, not actual device recordings.
 

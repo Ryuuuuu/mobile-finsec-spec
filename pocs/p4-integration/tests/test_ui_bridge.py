@@ -49,9 +49,9 @@ class UIBridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bridge.result(result['run_id'],1)['status'],'ok')
     async def test_late_project_generation_and_run_responses_rejected(self):
         ui=MockUIClient('project-a');generation=ui.select('results','synthetic-new')
-        base=dict(project_id='project-a',request_generation=generation,run_id='synthetic-new',status='ok',result={'marker':'new'})
+        base=dict(contract='mock-ui.v1',project_id='project-a',request_generation=generation,run_id='synthetic-new',status='ok',result={'marker':'new'})
         self.assertTrue(ui.apply(base))
-        for changes in ({'project_id':'project-b'},{'request_generation':generation-1},{'run_id':'synthetic-old'}):
+        for changes in ({'contract':'unsupported'},{'run_id':None},{'request_generation':True},{'project_id':'project-b'},{'request_generation':generation-1},{'run_id':'synthetic-old'}):
             self.assertFalse(ui.apply(dict(base,**changes)));self.assertEqual(ui.result,{'marker':'new'})
     async def test_no_device_no_run_and_result_path_rejection(self):
         api=self.api();api.inventory['devices']={};bridge=UIBridge('synthetic-project',api)
@@ -60,3 +60,34 @@ class UIBridgeTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(bridge.history(0)['runs'],[])
         self.assertFalse(bridge.progress('unknown',0)['controls']['device_input_enabled'])
         self.assertEqual(bridge.result('../outside',0)['status'],'invalid_selection')
+
+    async def test_progress_pages_fit_wire_without_skipping(self):
+        api=self.api();bridge=UIBridge('synthetic-project',api)
+        reply=api.submit(self.request());result=await api.wait(reply['execution_id'])
+        rid=result['run_id'];path=api.supervisor.root/rid/'live.jsonl'
+        # Large but bounded synthetic log previously exceeded UIWire's 256 KiB reply limit.
+        events=[{'seq':i,'type':'mock_progress','message':'x'*3000} for i in range(1,151)]
+        path.write_text(''.join(json.dumps(e)+'\n' for e in events),encoding='utf-8')
+        from integration.ui_wire import UIWire,LIMIT
+        wire=UIWire(bridge);cursor=0;seen=[]
+        while True:
+            raw=wire.exchange(json.dumps(dict(contract='mock-ui-request.v1',project_id='synthetic-project',request_generation=0,operation='progress',arguments={'execution_id':reply['execution_id'],'cursor':cursor})).encode())
+            self.assertLess(len(raw),LIMIT);page=json.loads(raw)
+            self.assertIsNone(page['delivery_error']);self.assertLessEqual(len(page['events']),64)
+            seen.extend(e['seq'] for e in page['events'])
+            self.assertGreater(page['next_cursor'],cursor);cursor=page['next_cursor']
+            if not page['has_more']:break
+        self.assertEqual(seen,list(range(1,151)));self.assertEqual(cursor,150)
+        # Oversized individual event is a visible stop, never silent cursor advancement.
+        path.write_text(json.dumps({'seq':1,'message':'x'*70000})+'\n',encoding='utf-8')
+        page=bridge.progress(reply['execution_id'],0)
+        self.assertEqual(page['delivery_error'],'EVENT_LIMIT');self.assertEqual(page['next_cursor'],0)
+        self.assertFalse(page['has_more'])
+        path.write_text('null\n',encoding='utf-8')
+        self.assertTrue(bridge.progress(reply['execution_id'],0)['resync_required'])
+
+    async def test_client_generation_overflow_preserves_selection(self):
+        ui=MockUIClient('mock');ui.select('results','synthetic-selected');ui.generation=2**53-1
+        with self.assertRaisesRegex(ValueError,'GENERATION_OVERFLOW'):ui.select('check')
+        self.assertEqual(ui.tab,'results');self.assertEqual(ui.run_id,'synthetic-selected')
+        self.assertFalse(ui.apply(None))
