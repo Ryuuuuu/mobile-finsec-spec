@@ -14,7 +14,7 @@ This explicit suite list excludes historical P3-backed tests and the legacy demo
 
 The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen or real model/device integration is established by these tests. The minimal authenticated mock loopback adapter is validated separately below; it is not production IPC.
 
-Validation on Windows/Python 3.12.10: the explicit runner executed 113 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
+Validation on Windows/Python 3.12.10: the explicit runner executed 116 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
 
 ## Current design and validation links
 
@@ -47,4 +47,6 @@ The previous P2/P3-coupled architecture, full-suite command and CLI examples are
 
 [Actual mock child-process IPC](docs/MOCK-STDIO.md) tests Python-to-Python private pipes, EOF, forced termination, restart admission persistence and selected synthetic P1/P2 artifact handoff. Rust-Python IPC remains unverified.
 
-[Mock loopback API](docs/LOOPBACK-API.md) validates actual local TCP authentication, token rotation, bounded/versioned requests, correlation and transport shutdown. Rust/GPUI and cross-process HTTP remain unverified.
+[Mock loopback API](docs/LOOPBACK-API.md) validates actual local TCP authentication, token rotation, bounded/versioned requests, correlation and transport shutdown. Rust/GPUI remain unverified; subsequent cross-process HTTP evidence is linked below.
+
+[Python HTTP child lifecycle](docs/HTTP-CHILD-LIFECYCLE.md) tests private-pipe bootstrap credentials, actual separate-process HTTP, in-progress shutdown and restart protection. This is not native desktop integration.

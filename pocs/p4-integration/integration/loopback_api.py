@@ -34,6 +34,12 @@ class LoopbackAPI:
         # Transport shutdown does not cancel/reconcile already admitted API jobs.
 
     async def handle(self, reader, writer):
+        # An accepted socket callback can start after close() took its task snapshot.
+        if self.server is None:
+            writer.close()
+            try: await asyncio.wait_for(writer.wait_closed(), 1)
+            except (OSError, TimeoutError): pass
+            return
         task = asyncio.current_task(); self.tasks.add(task)
         request_id = None
         dispatched = False

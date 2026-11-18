@@ -28,14 +28,18 @@ class StdioClient:
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, bufsize=0)
         try:
             ready = self._transaction(None)
-            if ready != {'contract': 'mock-stdio.v1', 'status': 'ready', 'synthetic': True}:
+            if not self.valid_handshake(ready):
                 raise UnknownOutcome('INVALID_HANDSHAKE')
+            self.ready = ready
         except Exception as exc:
             self.uncertain = True
             self.close()
             if not self.closed:
                 exc.cleanup_client = self  # Caller retains a handle for cleanup retry.
             raise
+
+    def valid_handshake(self, ready):
+        return ready == {'contract': 'mock-stdio.v1', 'status': 'ready', 'synthetic': True}
 
     def _transaction(self, data):
         result = queue.Queue(maxsize=1)

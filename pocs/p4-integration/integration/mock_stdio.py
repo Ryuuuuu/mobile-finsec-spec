@@ -34,7 +34,7 @@ def recording_registry(root):
     return result
 
 
-async def serve(root):
+def create_mock_api(root):
     # Keep fixture skills separate from user-authored inspection skills.
     skills = root / 'mock-skills'
     path = skills / 'mock-item' / 'common' / 'SKILL.md'
@@ -52,6 +52,11 @@ async def serve(root):
         'platform_skills': ['aos'], 'requires': ['mock_input']}}
     api = StartAPI(StructureSupervisor(root / 'runs', skills), inventory, catalog,
                    recording_registry(root))
+    return api
+
+
+async def serve(root):
+    api = create_mock_api(root)
     wire = UIWire(UIBridge('synthetic-stdio', api))
     def write(payload):
         sys.stdout.buffer.write(payload + b'\n')
