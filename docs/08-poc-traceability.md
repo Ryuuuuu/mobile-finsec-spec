@@ -170,3 +170,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Scoped packet-byte structural access
 
 [On-demand packet access](../pocs/p4-integration/docs/PACKET-ACCESS.md) allows selected mock executors to read synthetic request/response bytes by common record ID and packet ID. Grants are fenced/revoked, bounded and independent of collection completeness. Raw data is not persisted; OS/model gateway isolation and real packet acceptance remain unverified.
+
+### Structural live/final history
+
+[Run log/history contract](../pocs/p4-integration/docs/RUN-HISTORY.md) separates live lifecycle events from sealed final records, lists UTC-dated runs, and preserves cancellation/error/partial completion. 72 structural tests passed. Mock labels/reasons are fixed fixtures, not check implementations or real security conclusions.

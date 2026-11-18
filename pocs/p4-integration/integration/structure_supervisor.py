@@ -11,7 +11,7 @@ from .skill_structure import load_skills, provider_context
 from .recording_context import resolve_recording
 from .artifact_reader import read_artifacts
 from .packet_access import PacketGrant
-
+from .run_journal import RunJournal
 
 class MockExecutor:
     async def run(self, context, progress):
@@ -29,13 +29,17 @@ class StructureSupervisor:
         self.survivors=set()
 
     async def run(self, items, platform=None, timeout=0.2, progress_timeout=0.1,
-                  recording_id=None, recordings=None, artifact_files=None):
+                  recording_id=None, recordings=None, artifact_files=None, mock_outcomes=None):
         if (not isinstance(items,list) or not 1<=len(items)<=10
                 or not all(isinstance(x,str) for x in items) or len(set(items))!=len(items)
                 or platform not in (None,'aos','ios')):raise ValueError('INVALID_PLAN')
         for value in (timeout,progress_timeout):
             if type(value) not in (int,float) or not math.isfinite(value) or not 0.01<=value<=60:
                 raise ValueError('INVALID_TIMEOUT')
+        mock_outcomes={} if mock_outcomes is None else mock_outcomes
+        if not isinstance(mock_outcomes,dict) or set(mock_outcomes)-set(items) or any(v not in ('pass','fail','inconclusive') for v in mock_outcomes.values()):
+            raise ValueError('INVALID_MOCK_OUTCOMES')
+        mock_outcomes=deepcopy(mock_outcomes)
         artifact_data=None
         if artifact_files is not None:
             if recording_id is not None or recordings is not None or not isinstance(artifact_files,dict) or set(artifact_files)!={'link','route','packets'}:
@@ -45,11 +49,14 @@ class StructureSupervisor:
             recording=resolve_recording(recording_id,{} if recordings is None else recordings)
         run_id='synthetic-'+uuid4().hex
         output=self.root/run_id;output.mkdir()
+        journal=RunJournal(output,run_id)
         rows=[dict(item_id=i,execution_status='not_run',reason='NOT_REACHED',recording_context=deepcopy(recording)) for i in items]
         events=[];token=None;active=None;current=None;safe=True;grant=None
         result=dict(contract='structure-run.v1',run_id=run_id,synthetic=True,
                     execution_status='not_run',items=rows,events=events,recovery_required=False)
-        def emit(kind,**data):events.append(dict(seq=len(events)+1,type=kind,**data))
+        def emit(kind,**data):
+            event=dict(seq=len(events)+1,type=kind,**data)
+            journal.event(event);events.append(event)
         try:
             try:token=self.lease.acquire(run_id,self.epoch)
             except LeaseError:
@@ -103,6 +110,9 @@ class StructureSupervisor:
                 if grant is not None:
                     grant.revoke();rows[index]['packet_access_statuses']=list(grant.audit);grant=None
                 rows[index].update(execution_status='completed',reason='EXECUTED')
+                if item in mock_outcomes:
+                    value=mock_outcomes[item]
+                    rows[index]['mock_assessment']=dict(synthetic=True,label={'pass':'양호','fail':'취약','inconclusive':'판단 불가능'}[value],reason='FIXTURE_ONLY_'+value.upper())
                 emit('item_completed',item_id=item)
                 self.lease.begin_cleanup(token)
                 token=self.lease.finish_item(token,True,'completed')
@@ -135,8 +145,5 @@ class StructureSupervisor:
                 self.lease.release(token,safe,'completed' if safe else 'unknown')
             result['recovery_required']=not safe
             emit('run_finished',execution_status=result['execution_status'],recovery_required=not safe)
-            # Private local structural record; no skill text, model text or verdict field.
-            temp=output/'result.json.tmp'
-            temp.write_text(json.dumps(result,indent=2),encoding='utf-8')
-            temp.replace(output/'result.json')
+            journal.finalize(result)
         return result

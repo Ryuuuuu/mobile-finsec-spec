@@ -23,3 +23,7 @@ Future product work: formal provider-neutral executor/job contracts, stream-base
 Final validation: 47 selected structural tests passed, zero skips on Windows/Python 3.12.10. Fresh-process import verification confirmed no os_tamper, p3_adapter or legacy_supervisor module was loaded by StructureSupervisor. 109 traceability links resolve. The old judgement suite was not executed.
 
 The [recording reference contract](RECORDING-CONTEXT.md) adds common-ID P1 route/P2 packet metadata to each mock item context and saved result. It preserves missing/incomplete data independently of execution status; no real artifact reader or replay is enabled.
+
+## Live and final storage follow-up
+
+[Run history contract](RUN-HISTORY.md) adds a live lifecycle JSONL stream and final result seal plus UTC date/time listing. Optional fixed mock labels/reasons test presentation only; no judgement logic is inferred. Finalized storage is independent of success/cancel/error/partial completion.

@@ -159,3 +159,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [Offline P1/P2 file handoff](docs/ARTIFACT-HANDOFF.md) tests current route JSON/link and SQLite formats with synthetic files; it is not real-device or model validation.
 
 [On-demand packet bytes](docs/PACKET-ACCESS.md) adds scoped, revocable mock-agent access to synthetic P2 request/response BLOBs with independent completeness and truncation states.
+
+[Live logs and final history](docs/RUN-HISTORY.md) separate execution lifecycle from sealed result storage and list multiple UTC-dated runs. Assessment labels are fixed test values only.
