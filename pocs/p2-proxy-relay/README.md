@@ -179,3 +179,7 @@ extensions(압축 포함), subprotocol negotiation, HTTP/2 extended CONNECT·HTT
 proxy, HTTP keep-alive/chunked는 미지원으로 거부합니다. 제한된 codec adapter는 고정 버전의
 `Frame.parse` 메서드에 의존하므로 라이브러리 교체 시 회귀 검증이 필요합니다. P4는 기존 HTTP
 기본 인터페이스 회귀만 검증하며 P4의 WSS 통합 지원을 주장하지 않습니다.
+
+## Disposable Android network QA
+
+[App-origin HTTP/HTTPS/WS/WSS design, execution and measured results](docs/ANDROID-APP-VALIDATION.md) uses a separate loopback-only QA app and owned ADB reverse mappings. No global proxy or CA installation is performed. This does not establish arbitrary-app attribution or interception.

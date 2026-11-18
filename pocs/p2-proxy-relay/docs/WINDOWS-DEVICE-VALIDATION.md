@@ -31,3 +31,7 @@ The exact quoting depends on the host shell; the measured harness passed the `sh
 This verifies an actual USB/device transport path, **not Android application traffic capture**. `app_routing_verified=false` remains correct. Native/WebView network stacks, mixed-app traffic, TLS/WSS on device, pinning, HTTP/2/3/QUIC and USB unplug/reconnect have not been accepted here. Real device evidence/identifiers are excluded from the public repository.
 
 Next: use a dedicated disposable network QA application with an explicit loopback test endpoint and correlation IDs, retain fixed synthetic upstream routing, and compare client receipt IDs with persisted records. This can isolate app-origin traffic without changing a global proxy. General application proxying/CA trust changes require a concrete routing/trust design and separate user approval before any security setting is changed. Do not install a CA or weaken certificate validation merely to make a banking application pass.
+
+## Subsequent app-origin validation
+
+The next stage is now measured in [Disposable Android app validation](ANDROID-APP-VALIDATION.md): HTTP/HTTPS/WS/WSS app receipts and RECORD/STOP boundaries, plus untrusted-certificate rejection. The historical shell-only limitation above remains the scope of that earlier run.

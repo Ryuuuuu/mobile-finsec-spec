@@ -3,3 +3,10 @@
 *.sqlite*
 *.lock
 runtime/
+
+# Generated disposable PKI and build artifacts must stay local.
+*.pem
+*.key
+*.p12
+*.apk
+__pycache__/

@@ -1,6 +1,8 @@
 """Ephemeral localhost-only test PKI; never use or commit a real certificate/key."""
 from pathlib import Path
 import shutil
+import importlib.util
+import sys
 import ssl
 import subprocess
 import unittest
@@ -10,7 +12,16 @@ class TLSFixture:
     def __init__(self, directory):
         executable = shutil.which('openssl')
         if executable is None:
-            raise unittest.SkipTest('OpenSSL executable required for ephemeral localhost test certificates')
+            if importlib.util.find_spec('cryptography') is None:
+                raise unittest.SkipTest('OpenSSL CLI or requirements-device.txt needed for ephemeral test PKI')
+            self.directory = Path(directory)
+            generated = self.directory / 'python-pki'
+            subprocess.run([sys.executable, str(Path(__file__).resolve().parents[1] / 'tools/make_qa_pki.py'),
+                            '--output', str(generated)], check=True, capture_output=True, timeout=20)
+            self.ca = generated / 'assets/qa-ca.pem'
+            self.cert = generated / 'server.pem'
+            self.key = generated / 'server.key'
+            return
         self.directory = Path(directory)
         self.directory.mkdir(parents=True, exist_ok=True)
         self.ca = self.directory / 'synthetic-ca.pem'
