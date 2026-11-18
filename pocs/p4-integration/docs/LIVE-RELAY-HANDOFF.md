@@ -138,3 +138,29 @@ adapter and opaque mock executor. They do not establish GUI/phone compatibility,
 financial-app support, real model execution or P4 import of replay-result links.
 
 Full structure-only validation: 145/145 PASS, zero skips (27.809s), existing P2 venv.
+
+## Preserve surviving packets after capture write loss
+
+A real-code integration test reproduced a reader defect: both synthetic requests
+reached the upstream, but injected Store write errors lost the first capture.
+P2 correctly persisted the later packet with its original sequence 2 and reported
+interrupted/partial capture. P4 incorrectly required sequences to begin at 1 with
+no gaps, called the whole store corrupt, and withheld the surviving packet.
+
+The reader now accepts strictly increasing positive integer sequences with matching
+SQL/metadata identities. A missing leading or intermediate sequence forces partial
+status even if the recording row claims complete. Original sequences are preserved;
+no missing packet is invented or renumbered. Duplicate, nonpositive, mistyped or
+mismatched sequences remain corrupt. This is a completeness distinction, not a
+claim that the cause of every gap can be identified or the database authenticated.
+
+The integration regression injects SQLite write failure in actual P2 storage,
+waits for that failed queue to drain, restores storage, sends another request and
+finishes actual P1 recording. The remaining packet reaches P4's scoped raw-byte
+reader as partial capture; acknowledged input is preserved separately. Additional
+synthetic artifact tests cover a gap despite a complete recording claim and
+invalid/duplicate sequence rejection. This is controlled write failure, not a
+physical disk fault or a throughput/overload benchmark. No device, model or
+inspection implementation is exercised.
+
+Capture-loss follow-up validation: full structure-only suite 148/148 PASS, zero skips (35.433s), existing P2 venv.

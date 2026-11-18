@@ -405,6 +405,26 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.handoff())['packet_status'],'complete')
         self.assertEqual(self.stop_calls,1)
 
+    async def test_capture_write_loss_preserves_later_packet_and_partial_handoff(self):
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        self.relay.store.fail_writes=True
+        try:
+            await self.request('/lost-capture',b'QA LOST CAPTURE')
+            await self.relay.queue.join()
+        finally:self.relay.store.fail_writes=False
+        await self.request('/retained-capture',b'QA HANDOFF')
+        await asyncio.to_thread(self.combined.finish);await self.relay.close()
+        self.assertEqual(len(self.up.received),2)
+        self.assertGreater(self.combined.link['network_stop']['counters']['storage_errors'],0)
+        self.assertEqual(self.combined.state,'partial')
+        self.files=dict(link=self.engine.j.path/'combined-link.json',route=self.engine.j.path/'route.json',packets=self.db)
+        summary,data=self.read_files(self.files)
+        self.assertEqual(summary['packet_status'],'partial')
+        self.assertEqual(summary['packet_count'],1)
+        self.assertEqual([packet['sequence'] for packet in data['packets']],[2])
+        self.assertEqual((await self.handoff())['packet_status'],'partial')
+
     async def test_wss_fragment_at_stop_preserves_partial_handoff(self):
         from websockets.frames import Frame,OP_TEXT
         ws=load('p4_handoff_ws_fixture',BASE/'p2-proxy-relay/tests/test_websocket.py')

@@ -61,6 +61,29 @@ class ArtifactTests(unittest.IsolatedAsyncioTestCase):
         summary,data=self.read()
         self.assertEqual((summary['route_status'],summary['packet_status']),('partial','partial'))
         self.assertEqual(data['actions'],[])
+    async def test_packet_sequence_gap_is_partial_even_if_record_claims_complete(self):
+        with closing(sqlite3.connect(self.files['packets'],isolation_level=None)) as c:
+            raw=c.execute('SELECT data FROM packets').fetchone()[0];packet=json.loads(raw);packet['sequence']=3
+            c.execute('UPDATE packets SET sequence=3,data=?',(json.dumps(packet),))
+        summary,data=self.read()
+        self.assertEqual(summary['packet_status'],'partial')
+        self.assertEqual([p['sequence'] for p in data['packets']],[3])
+
+    async def test_invalid_or_duplicate_packet_sequence_still_corrupt(self):
+        with closing(sqlite3.connect(self.files['packets'])) as c:
+            original=json.loads(c.execute('SELECT data FROM packets').fetchone()[0])
+        for sequence in (0,-1,True,'1'):
+            packet=dict(original,sequence=sequence)
+            with closing(sqlite3.connect(self.files['packets'],isolation_level=None)) as c:
+                c.execute('UPDATE packets SET sequence=?,data=?',(sequence,json.dumps(packet)))
+            self.assertEqual(self.read()[0]['packet_status'],'corrupt')
+        with closing(sqlite3.connect(self.files['packets'],isolation_level=None)) as c:
+            c.execute('UPDATE packets SET sequence=1,data=?',(json.dumps(original),))
+            duplicate=dict(original,packet_id='synthetic-duplicate')
+            c.execute('INSERT INTO packets SELECT ?,recording_id,sequence,?,request,response FROM packets',
+                      ('synthetic-duplicate',json.dumps(duplicate)))
+        self.assertEqual(self.read()[0]['packet_status'],'corrupt')
+
     async def test_missing_and_corrupt(self):
         self.files['route'].unlink();self.assertEqual(self.read()[0]['route_status'],'missing')
         self.files['route'].write_text('{');self.assertEqual(self.read()[0]['route_status'],'corrupt')

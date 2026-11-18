@@ -122,16 +122,20 @@ def _read_artifacts(link_path,route_path,db_path):
             if record.get('status') not in ('completed','interrupted','recording','stopping','failed'):raise ValueError('STATUS')
             count=conn.execute('SELECT count(*) FROM packets WHERE recording_id=?',(link['network_recording_id'],)).fetchone()[0]
             if count>100:raise ValueError('PACKET_LIMIT')
-            packets=[]
+            packets=[];previous_sequence=0;sequence_gaps=False
             for pid,seq,data in conn.execute('SELECT id,sequence,data FROM packets WHERE recording_id=? ORDER BY sequence',(link['network_recording_id'],)):
                 if len(data.encode())>65536:raise ValueError('PACKET_LIMIT')
                 p=decode(data)
                 if p.get('schema_version')!=1:raise ValueError('PACKET_VERSION')
-                if p.get('recording_id')!=link['network_recording_id'] or p.get('packet_id')!=pid or p.get('sequence')!=seq or seq!=len(packets)+1:
+                if (p.get('recording_id')!=link['network_recording_id'] or p.get('packet_id')!=pid
+                    or type(seq) is not int or type(p.get('sequence')) is not int
+                    or p['sequence']!=seq or seq<=previous_sequence):
                     raise ValueError('PACKET_ID_ORDER')
+                if seq!=previous_sequence+1:sequence_gaps=True
+                previous_sequence=seq
                 if type(p.get('incomplete')) is not bool:raise ValueError('PACKET_STATE')
                 packets.append({k:p.get(k) for k in ('packet_id','sequence','timestamp','kind','protocol','request','response','incomplete')})
-            partial=(record['status']!='completed' or record.get('network_coverage')!='complete_for_supported_scope'
+            partial=(sequence_gaps or record['status']!='completed' or record.get('network_coverage')!='complete_for_supported_scope'
                      or record.get('persisted_packets')!=count or bool(record.get('gaps')) or any(p['incomplete'] for p in packets))
             summary.update(packet_status='partial' if partial else 'complete',packet_count=count)
             payload['packets']=packets
