@@ -76,3 +76,11 @@ Every output directory must be new. Raw tool output may contain application logi
 or strings; treat the entire directory as private. Tool time/output errors preserve
 partial evidence with failed/inconclusive status. Exit 0 means extraction completed,
 not that obfuscation protection passed.
+
+### Durability and scope
+
+[Per-DEX, size and failure validation](docs/DEX-DURABILITY.md) now records root DEX
+inventories, selected-class provenance, partial extraction and explicit unassessed
+native/WebView/resource scope. A WebView reference or `.so` ZIP filename is not an
+analysis result. Two-DEX and ~24 MiB padded QA APKs passed actual SDK extraction;
+>32 MiB input is rejected. All security verdicts remain inconclusive.

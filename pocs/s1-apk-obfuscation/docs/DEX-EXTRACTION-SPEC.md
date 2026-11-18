@@ -57,3 +57,29 @@ version/code-generation differences as a confound, so the acceptance pair now us
 R8 8.9.27 for BOTH variants with the same javac input and common flags. Only the
 plain variant adds -dontobfuscate. Pilot extraction is not substituted for this
 controlled rerun. No shrinking or optimization is claimed or measured here.
+
+## Durability and coverage extension
+
+Read each root classes*.dex independently with --files and persist per-DEX class
+and member inventories plus hashes. Duplicate definitions across DEX fail closed.
+Selected smali is linked to its defining DEX; partial failures retain completed
+observations and name unextracted selections. No missing DEX is silently omitted.
+
+Coverage is explicit for DEX enumeration, per-DEX definitions, selected smali,
+native ZIP paths, WebView reference signals, web asset counts and nonstandard DEX
+locations. Native/JS/WebView behavior and whole-app protection are ALWAYS not
+analyzed/not assessed. An absent reference signal does not mean absent WebView;
+reflection, dynamic code and unselected method bodies remain outside coverage.
+
+Keep 32 MiB APK, 8 MiB entry and 64 MiB expanded ZIP limits. Run tools with a 256 MiB
+JVM heap, 30-second timeout and 4 MiB stdout+stderr polling limit; report the failing
+stage and preserve partial logs. This is a supported-size boundary, not support for
+arbitrarily large APKs or strict disk quotas (polling can overshoot briefly).
+
+Plan: real D8-built extra DEX referencing WebView, same unsigned authored QA base;
+24 MiB stored inert padding inside a parseable APK; >32 MiB rejected before tools;
+separate synthetic .so path marker (not compiled native code) to test honest scope
+labels. SDK runs and these constructed materials are identified separately from
+unit fault injection. No device/WebView page execution or native analysis occurs.
+
+Bound total work to 120 seconds and at most 16 root DEX entries in addition to per-call limits. Native/resource counts remain unknown if inventory did not complete. Stage-complete flags never imply whole-application coverage. See DEX-DURABILITY.md for executed scope and limitations.

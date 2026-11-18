@@ -70,9 +70,21 @@ def analyze(apk, java, tools, selected, output):
     output=Path(output);output.mkdir(parents=True,exist_ok=False)
     result=dict(schema_version='1.0',check_id='CHK-15',synthetic=False,
                 execution_status='failed',verdict='inconclusive',reason_code='ANALYSIS_INCOMPLETE',
+                selected=[],
+                coverage=dict(dex_inventory='not_run',dex_defined='not_run',selected_smali='not_run',
+                    whole_application='not_assessed',native=dict(status='not_analyzed',entry_count=None),
+                    webview=dict(status='not_analyzed',reference_signal='unknown'),
+                    resources=dict(status='not_analyzed',web_asset_count=None)),
+                limits=dict(apk_bytes=MAX_APK,tool_timeout_seconds=30,tool_output_bytes=4*1024*1024,total_seconds=120,max_dex_files=16),
                 limitations=['Actual DEX evidence only; no security verdict or semantic readability scoring.',
                     'No signature verification, native/resource analysis, runtime or whole-app coverage.',
                     'Direct Java timeout management is not a hostile-parser OS sandbox.'])
+    deadline=time.monotonic()+120
+    def invoke(command,label):
+        remaining=deadline-time.monotonic()
+        if remaining<=0:raise AnalysisError('ANALYSIS_TIMEOUT')
+        return run_tool(command,output,label,timeout=min(30,remaining))
+    stage='preflight'
     try:
         if (not selected or len(selected)>20 or len(set(selected))!=len(selected)
                 or any(not re.fullmatch(r'[A-Za-z_$][A-Za-z0-9_$]*(?:\.[A-Za-z_$][A-Za-z0-9_$]*)*',s) for s in selected)):
@@ -82,34 +94,62 @@ def analyze(apk, java, tools, selected, output):
         jar=Path(tools)/'lib/apkanalyzer-classpath.jar'
         result['tool']=dict(package='Android SDK Command-line Tools',revision='19.0',
             launcher_jar_sha256=digest(bounded(jar,MAX_APK)))
+        stage='inventory'
         info,entries=inventory(apk)
         result['inventory']=info
+        result['coverage']['native'].update(entry_count=info['native_entries'],presence_basis='ZIP paths only, not ELF validation')
+        result['coverage']['resources']['web_asset_count']=sum(n.endswith(('.js','.html','.htm')) for n in entries)
+        result['coverage']['nonstandard_dex_entries']=[n for n in entries if n.endswith('.dex') and not re.fullmatch(r'classes(?:[2-9]|[1-9][0-9]+)?\.dex',n)]
         raw=bounded(apk,MAX_APK)
         if digest(raw)!=info['artifact_sha256']:raise AnalysisError('ARTIFACT_CHANGED')
         snapshot=output/'input.apk';snapshot.write_bytes(raw)
-        prefix=[java,'-Dcom.android.sdklib.toolsdir='+str(Path(tools).resolve()),'-cp',jar,
+        prefix=[java,'-Xmx256m','-Dcom.android.sdklib.toolsdir='+str(Path(tools).resolve()),'-cp',jar,
                 'com.android.tools.apk.analyzer.ApkAnalyzerCli']
-        dexlist=run_tool([*prefix,'dex','list',snapshot],output,'dex-list')
+        stage='dex-list'
+        dexlist=invoke([*prefix,'dex','list',snapshot],'dex-list')
         dexnames=[line.strip().lstrip('/') for line in dexlist.splitlines() if line.strip()]
         expected=sorted(n for n in entries if re.fullmatch(r'classes(?:[2-9]|[1-9][0-9]+)?\.dex',n))
+        if len(expected)>16:raise AnalysisError('DEX_COUNT_LIMIT')
         if not dexnames or sorted(dexnames)!=expected:raise AnalysisError('DEX_LIST_MISMATCH')
-        package_text=run_tool([*prefix,'dex','packages','--defined-only',snapshot],output,'packages')
-        result['defined']=parse_packages(package_text)
-        if any(name not in result['defined']['classes'] for name in selected):raise AnalysisError('SELECTED_CLASS_MISSING')
-        result['selected']=[]
+        result['coverage']['dex_inventory']='complete'
+        result['coverage']['dex_defined']='partial'
+        result['dex_files']=[]
+        all_classes=[];all_methods=[];all_fields=[]
+        for index,dexname in enumerate(dexnames):
+            stage='dex-packages:'+dexname
+            text=invoke([*prefix,'dex','packages','--defined-only','--files',dexname,snapshot],f'packages-{index}')
+            parsed=parse_packages(text)
+            if set(all_classes).intersection(parsed['classes']):raise AnalysisError('DUPLICATE_CLASS_ACROSS_DEX')
+            result['dex_files'].append(dict(name=dexname,sha256=digest(entries[dexname]),**parsed))
+            all_classes.extend(parsed['classes']);all_methods.extend(parsed['methods']);all_fields.extend(parsed['fields'])
+        result['defined']=dict(classes=all_classes,methods=all_methods,fields=all_fields,
+            class_count=len(all_classes),method_count=len(all_methods),field_count=len(all_fields),
+            short_class_names=sum(len(c.rsplit('.',1)[-1])<=2 for c in all_classes))
+        result['coverage']['dex_defined']='complete'
+        result['coverage']['webview']['reference_signal']='observed' if any('android.webkit.WebView' in m for m in all_methods+all_fields) else 'not_observed_in_defined_signatures'
+        if any(name not in all_classes for name in selected):raise AnalysisError('SELECTED_CLASS_MISSING')
+        result['coverage']['selected_smali']='partial'
         for index,name in enumerate(selected):
-            text=run_tool([*prefix,'dex','code','--class',name,snapshot],output,f'code-{index}')
-            result['selected'].append(smali_summary(text,name))
+            stage='smali:'+name
+            text=invoke([*prefix,'dex','code','--class',name,snapshot],f'code-{index}')
+            summary=smali_summary(text,name)
+            summary['dex_file']=next(item['name'] for item in result['dex_files'] if name in item['classes'])
+            result['selected'].append(summary)
+            if 'Landroid/webkit/WebView;' in text:result['coverage']['webview']['reference_signal']='observed'
+        result['coverage']['selected_smali']='complete'
         result.update(execution_status='completed',reason_code='DEX_EVIDENCE_NOT_SECURITY_VERDICT')
     except (OSError,ValueError,TypeError,RuntimeError,zipfile.BadZipFile,NotImplementedError) as exc:
-        result['reason_code']=str(exc) if isinstance(exc,AnalysisError) else 'INPUT_OR_TOOL_ERROR'
+        known_limits={'INPUT_LIMIT','EXPANSION_LIMIT','ENTRY_LIMIT'}
+        result['reason_code']=str(exc) if isinstance(exc,AnalysisError) or str(exc) in known_limits else 'INPUT_OR_TOOL_ERROR'
+        result['failure_stage']=stage
+    result['coverage']['unextracted_selected_classes']=[name for name in (selected or []) if name not in {r['class_name'] for r in result['selected']}]
     def file_hash(path):
         hasher=hashlib.sha256()
         with path.open('rb') as stream:
             for chunk in iter(lambda:stream.read(65536),b''):hasher.update(chunk)
         return hasher.hexdigest()
     result['evidence']=[dict(file=p.name,sha256=file_hash(p),bytes=p.stat().st_size)
-                        for p in sorted(output.glob('*.stdout'))]
+                        for p in sorted(output.iterdir()) if p.suffix in {'.stdout','.stderr'}]
     with (output/'result.json').open('x',encoding='utf-8') as stream:
         json.dump(result,stream,indent=2,ensure_ascii=False)
     return result

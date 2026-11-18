@@ -84,3 +84,7 @@ trusted SDK directory is outside this POC's guarantee.
 APKs, mappings, raw DEX/smali, hashes and complete tool stdout/stderr remain in private
 output directories. Only authored source/scripts/tests and this summary are public.
 No device, real account, network service, model or security setting was touched.
+
+The [durability follow-up](DEX-DURABILITY.md) adds per-DEX provenance, explicit
+unassessed native/WebView/resource scope, bounded work and partial failure results.
+Its actual multi-DEX/size SDK runs are separate from injected fault tests.
