@@ -38,3 +38,23 @@ Validation on 2026-11-19: 148 P1 tests passed. New cases cover publication/resta
 - Source recording identity matched the first replay, original QA receipt bytes matched all three attempt backups, reverse mappings were empty, active/quarantined leases were zero, and user-maintained settings remained unchanged. Normal native close also stopped the owned Appium server.
 
 Real evidence stays private. This proves a native-launched separate P1 recording/replay flow for the cooperating QA app; it does not prove embedded GPUI mirroring, arbitrary-app automation, custom naming/editing, native active-cancel acceptance, or inspection/model execution. Names are generated and refresh is explicit. Automated restart/catalog tests use synthetic fixtures; no native UI restart acceptance is claimed.
+
+## Cancellation, loss and restart acceptance (device-free)
+
+Follow-up to `4245317`, 2026-11-19: five new regression tests in `tests/test_native_failure_boundaries.py`; full P1 suite **153 passed**. No device/GUI input, physical USB interruption, OS network/security change, inspection skill or new integration was used. No production-code defect was reproduced, so this change adds tests rather than new recovery policy.
+
+| Boundary | Exercised path and observation |
+| --- | --- |
+| Loss/timeout/cancel after dispatch | Actual Engine -> CombinedRun -> ReplayQueue with a synthetic adapter that acknowledges one input then raises connection uncertainty/timeout or requests cancellation. One input only; scoped RECORD/STOP; remaining routes not_run; immediate retry rejected. Every pre-existing synthetic evidence file retains its SHA-256. |
+| Capture cancellation | Actual capture subprocess owner with a local synthetic child replacing Tk/device code. Cancellation marker is delivered, child exits normally, final status is interrupted, no new selectable capture is published. A completed cleanup permits a new explicit command; the old command is never automatically replayed after restart. |
+| Child exits without cleanup result | Real local child exits with code 7 and no proof. Admission remains unresolved; fresh API instance blocks new work; no capture is published. |
+| Delayed cleanup | Real local child acknowledges cancellation but waits on a test gate. Owner remains live, progress remains in_progress, final history stays empty, overlapping start and restarted API admission are blocked. Releasing the test gate allows verified cleanup and normal exit; no hard kill is used. |
+| Parent pipe disappears | Separate Python API process receives a real pipe EOF after submit. Worker receives cancellation and exits. Clean versus unconfirmed cleanup is persisted distinctly; restart permits new work only for the clean case. The old command returns recovery_required in both cases. Pre-existing synthetic files are unchanged. |
+
+These are current POC behaviors, not an agreed product stop/skip/resume policy. The timeout case injects an exception after simulated dispatch; it does not unplug A34 or claim an actual Appium timeout. Pipe EOF models the existing native deadline/disconnect action, but the Rust timer itself is not exercised in these new tests. Cancellation marker handling uses a synthetic child, so active native Tk cancellation remains separately unverified. A permanently hung capture child has no bounded forced-termination policy: the owner may keep waiting and new work remains blocked. This is an explicit unresolved limitation, not successful resource recovery. Actual previously captured device evidence was not modified or used as test fixtures.
+
+Reproduce the focused device-free cases from P1 with the existing environment:
+
+```text
+python -m unittest discover -s tests -p test_native_failure_boundaries.py -v
+```
