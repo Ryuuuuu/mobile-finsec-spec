@@ -186,3 +186,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### GPUI contract alignment via mock UI
 
 [Screen/API mapping](../pocs/p4-integration/docs/UI-CONTRACT-BRIDGE.md) compares approved record/check/result flows against P1/P2 source readers and P4 start/live/history contracts. Mock UI tests cover finalized-only results, cursors/late responses and no-device/partial/cancel states. Actual GPUI, device/model execution and production authenticated transport remain unimplemented/unverified.
+
+### Native GPUI preparation boundary
+
+[Build prerequisites and vertical-slice plan](../pocs/p4-integration/docs/GPUI-NATIVE-PREPARATION.md): Rust/Cargo, MSVC tools and CMake were unavailable in the build terminal. Native compilation/window/transport integration were not run. A Python discovery probe preserves existing PowerShell policy; no installation, inspection logic or device changes.

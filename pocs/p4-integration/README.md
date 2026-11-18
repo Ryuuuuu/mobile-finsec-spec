@@ -167,3 +167,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [Integrated structural acceptance](docs/INTEGRATED-STRUCTURE.md) connects start selection through source-format synthetic recording, live logs, scoped packet bytes, sealed results and multi-run history; includes failure/restart boundaries.
 
 [GPUI contract alignment via mock UI](docs/UI-CONTRACT-BRIDGE.md) tests record/check/result projections, live cursor behavior, finalized history, disconnected/partial/cancel states. No GPUI implementation is claimed.
+
+[Native GPUI preparation](docs/GPUI-NATIVE-PREPARATION.md) records missing build prerequisites, a read-only probe and a reproducible mock screen/API integration plan. Native compilation and rendering remain not run.
