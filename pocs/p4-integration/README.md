@@ -14,7 +14,7 @@ This explicit suite list excludes historical P3-backed tests and the legacy demo
 
 The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen or real model/device integration is established by these tests. The minimal authenticated mock loopback adapter is validated separately below; it is not production IPC.
 
-Validation on Windows/Python 3.12.10: the explicit runner executed 119 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
+Validation on Windows/Python 3.12.10: the explicit runner executed 121 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
 
 ## Current design and validation links
 
@@ -53,4 +53,4 @@ The previous P2/P3-coupled architecture, full-suite command and CLI examples are
 
 [Native Rust–Python pipe gate](docs/NATIVE-RUST-PIPE.md) builds and runs a narrow Windows no_std executable using the already bundled LLVM linker: 6 shared Rust guard checks, 3 direct Python round trips and 3 invalid-input cases. Cargo/libtest, Rust HTTP and GPUI remain unverified.
 
-[Existing P1/P2 runtime handoff](docs/LIVE-RELAY-HANDOFF.md) tests the real recording engine/barriers and live loopback relay feeding P4, with a fake device only. Normal, truncated-response and lost-STOP-reply states are preserved.
+[Existing P1/P2 runtime handoff](docs/LIVE-RELAY-HANDOFF.md) tests the real recording engine/barriers and live loopback relay feeding P4, with a fake device only. Normal, truncated-response and lost-STOP-reply states are preserved. Sequential recordings remain isolated; STOP alone leaves live storage unsealed, so offline handoff requires writer closure or a future consistent snapshot export.

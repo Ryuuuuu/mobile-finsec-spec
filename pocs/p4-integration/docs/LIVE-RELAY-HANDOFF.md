@@ -24,3 +24,15 @@ This checks ordering, file compatibility and preservation of failure states acro
 
 Reproduce from pocs/p4-integration: `python -m unittest discover -s tests -p test_live_relay_handoff.py -v`. The current explicit structural runner includes the same three tests. Temporary listeners, relay writers and files are cleaned up. No production runtime defect was found in these scenarios, so existing P1/P2 behavior was not modified.
 Validation: Windows/Python 3.12.10 targeted scenarios 3/3 passed; full explicit structure runner 119/119 passed, zero skips (18.322 seconds).
+
+## Sequential recording and publication boundary
+
+The follow-up actual-code tests exercise two additional integration boundaries:
+
+- STOP acknowledgment is not a storage seal. After a successful combined finish, the real P2 writer still owns WAL storage. P4 returns `packet_status=unsealed` and no packet payload. Closing the relay seals storage; re-reading the same files then yields complete packets and a successful structural handoff. No WAL files are manually removed and no live database is opened with immutable mode.
+- Two sequential P1 combined recordings share one real P2 database. Five requests are forwarded (before, first recording, between, second recording, after); only the two in-recording requests are captured, one per recording. Distinct common IDs and P2 packet IDs remain isolated. A real packet grant reads its own synthetic body, returns `missing` for the other recording's packet under its own ID, and `denied` when the caller substitutes the other common ID.
+
+The five focused tests passed on Windows/Python 3.12.10. These are actual local runtime and TCP boundaries with a fake device, not GUI/device/model tests. No runtime fix was required.
+
+Product integration constraint: the current P4 offline reader cannot consume a completed capture while the shared P2 writer remains open. A product that keeps the proxy running during inspection needs an explicitly sealed, consistent snapshot/export with recording identity and integrity metadata, or must stop/close the writer before handoff. A successful STOP must not be presented as packet-analysis readiness. Snapshot publication is not implemented or claimed by this POC; copying the live SQLite main file alone is not an acceptable substitute. The synthetic tests do not cover abrupt process termination, concurrent external database writers or packets racing exactly with command admission.
+Follow-up full regression: 121/121 structural tests passed, zero skips (18.868 seconds).
