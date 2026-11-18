@@ -173,3 +173,7 @@ Hawkeye는 [검토 문서](../../../docs/05-hawkeye-review.md)의 설계상 제�
 - 장시간 부하, DB 전체 quota/보존 정책, 영구 filesystem stall, 전원 장애 내구성, 상태 변경과 command journal 사이 crash의 exactly-once 보장.
 
 실기기 확장은 위 항목별 독립 명세와 검증이 선행되어야 한다. 현재 `complete_for_supported_scope`는 제한된 합성 HTTP 범위의 기록 완전성이지 전체 앱 수집 성공이나 보안상 양호 판정이 아니다.
+
+## Windows / device follow-up
+
+See [2026-11-18 measured Windows and Android transport results](WINDOWS-DEVICE-VALIDATION.md). This supplements the historical cloud-only results above: Windows HTTP/WS checks and a device-shell USB HTTP path were exercised; app attribution and device TLS remain unverified.

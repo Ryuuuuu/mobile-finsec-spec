@@ -610,7 +610,10 @@ asyncio.run(main())
             await asyncio.wait_for(child.wait(), 3)
             release.set()
             writer.close()
-            await writer.wait_closed()
+            try:
+                await writer.wait_closed()
+            except ConnectionResetError:
+                pass  # Expected when the peer was intentionally killed.
             writer = None
             await self.make_relay()
             recovered = self.recording(recording_id)
@@ -625,7 +628,10 @@ asyncio.run(main())
         finally:
             if writer:
                 writer.close()
-                await writer.wait_closed()
+                try:
+                    await writer.wait_closed()
+                except ConnectionResetError:
+                    pass  # Expected after intentional peer termination.
             if child.returncode is None:
                 child.kill()
                 await child.wait()
