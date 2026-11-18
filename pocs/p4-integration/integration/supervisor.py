@@ -123,6 +123,9 @@ class Supervisor:
     def _check(self, h, item_started=None):
         if h.cancel_event.is_set():
             raise StopRun('RUN_CANCELLED', 'cancelled')
+        if any(stream.done() and not stream.cancelled() and stream.exception() is not None
+               for stream in h.streams):
+            raise StopRun('PROVIDER_STREAM_ERROR')
         now = time.monotonic()
         if now - h.started > h.plan.run_timeout:
             raise StopRun('RUN_TIMEOUT', 'timed_out')
@@ -377,13 +380,22 @@ class Supervisor:
         lease_state = self.lease.inspect()
         if lease_state['lifecycle'] != 'recovery_required':
             self.lease.begin_cleanup(h.token)
+        cancel_targets = [(provider, job) for provider, job in h.providers if not job.task.done()]
         cancel_requests = [asyncio.create_task(provider.cancel(job.job_id))
-                           for provider, job in h.providers if not job.task.done()]
+                           for provider, job in cancel_targets]
         h.resources.extend(cancel_requests)
         if cancel_requests:
             await asyncio.wait(cancel_requests, timeout=h.plan.cancel_grace)
         cancel_failed = any(f.done() and (f.cancelled() or f.exception() is not None)
                             for f in cancel_requests)
+        cancel_unknown = any(not f.done() for f in cancel_requests)
+        # A successful RPC response is only an acknowledgement, not remote termination.
+        for future, (_, job) in zip(cancel_requests, cancel_targets):
+            if future.done() and not future.cancelled() and future.exception() is None:
+                value = future.result()
+                if (not isinstance(value, dict) or value.get('cancel_requested') is not True
+                        or value.get('job_id') != job.job_id):
+                    cancel_failed = True
         pending = [f for f in h.resources if not f.done()]
         if pending:
             _, pending_set = await asyncio.wait(pending, timeout=h.plan.cancel_grace)
@@ -416,7 +428,15 @@ class Supervisor:
             if not stream.done():
                 stream.cancel()
         if h.streams:
-            await asyncio.gather(*h.streams, return_exceptions=True)
+            await asyncio.wait(h.streams, timeout=h.plan.cancel_grace)
+        stream_pending = any(not stream.done() for stream in h.streams)
+        stream_failed = any(stream.done() and not stream.cancelled() and stream.exception() is not None
+                            for stream in h.streams)
+        terminated = terminated and not stream_pending
+        if stream_failed:
+            cleanup = dict(cleanup, status='failed', reason_code='PROVIDER_STREAM_ERROR')
+        if cancel_unknown:
+            cleanup = dict(cleanup, status='unknown', reason_code='PROVIDER_CANCEL_UNCONFIRMED')
         if cancel_failed:
             cleanup = dict(cleanup, status='failed', reason_code='PROVIDER_CANCEL_ERROR')
         if not terminated or h.recovery_required:
@@ -427,11 +447,14 @@ class Supervisor:
             self.lease.release(h.token, terminated=terminated, cleanup_status=cleanup['status'])
         self._emit(h, 'cleanup_finished', {'status': cleanup['status'], 'terminated': terminated,
                    'recovery_required': cleanup['status'] != 'completed'})
-        return dict(cleanup, terminated=terminated)
+        return dict(cleanup, terminated=terminated,
+                    provider_cancel_status=('failed' if cancel_failed else 'unknown' if cancel_unknown
+                                            else 'acknowledged' if cancel_requests else 'not_needed'),
+                    cancellation_scope='local_cooperative_only')
 
     async def close(self):
         # Test/CLI teardown only; never clears persisted quarantine.
-        pending = [f for h in self.handles.values() for f in h.resources if not f.done()]
+        pending = [f for h in self.handles.values() for f in [*h.resources, *h.streams] if not f.done()]
         if pending:
             await asyncio.wait(pending, timeout=2)
         self.executor.shutdown(wait=False, cancel_futures=False)

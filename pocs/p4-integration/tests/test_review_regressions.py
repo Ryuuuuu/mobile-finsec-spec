@@ -47,7 +47,8 @@ class ReviewRegressions(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(handle.state, 'cancelled')
         self.assertTrue(handle.result['cleanup']['terminated'])
         self.assertTrue(all(f.done() for f in handle.resources))
-        self.assertEqual(manager.lease.inspect()['lifecycle'], 'free')
+        self.assertEqual(manager.lease.inspect()['lifecycle'], 'recovery_required')
+        self.assertEqual(handle.result['cleanup']['provider_cancel_status'], 'unknown')
 
     async def test_cancel_rpc_error_preserves_quarantine_after_forced_stop(self):
         class BrokenCancel(FakeProvider):

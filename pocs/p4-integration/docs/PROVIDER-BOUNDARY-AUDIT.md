@@ -34,3 +34,17 @@ Five added tests cover stalled main/item starts and main/item result retrieval, 
 Full-suite result is recorded after completion below. Private logs remain outside Git.
 
 Windows Python 3.12.10 regression: **133 tests run, 132 passed, 1 skipped**. The skipped test requires Windows symlink privilege; no security setting was changed. Five new boundary tests all passed. Command: `python -m unittest discover -s tests -v`.
+
+## Stream termination and cancellation follow-up
+
+The audit found an unbounded gather during provider stream cleanup and ignored stream exceptions. Cleanup now cancels streams, waits only the configured cancel grace, and retains recovery if any stream survives. Stream exceptions produce `PROVIDER_STREAM_ERROR` without logging arbitrary exception text. `close()` includes surviving streams in its bounded local teardown wait. This bounds cooperative asynchronous cleanup, not a synchronous event-loop block or an external process.
+
+Cancellation responses must acknowledge the exact requested job with `cancel_requested: true`. A missing response within the grace period is `unknown` even if forced cancellation subsequently stops the local task. A malformed/mismatched response is `failed`. Both retain recovery and prevent another run. The saved cleanup reports `provider_cancel_status` and `cancellation_scope: local_cooperative_only`; acknowledgement is never represented as proof of remote termination.
+
+Three new tests inject a stream that ignores cancellation until a controlled release, a stream exception carrying a private sentinel, and a wrong-job cancel acknowledgement. The existing hanging-cancel test now expects recovery instead of treating local task termination as sufficient acknowledgement. A newly constructed supervisor sharing the same SQLite lease is blocked while recovery persists. Late stream termination does not alter the sealed result or automatically release ownership. This tests durable lease reuse by another supervisor instance, not an actual OS restart or remote API.
+
+No retry/backoff was added: ambiguous admission, unconfirmed cancellation, surviving work and stream failure remain blocked for explicit reconciliation. Both fake configurations still use one cooperative implementation. No A34, external service, model credential or paid inference was used.
+
+The watchdog also checks failed streams before progressing, so an observed stream exception stops subsequent tool execution instead of waiting until final cleanup. The private-sentinel test asserts zero tool starts and no raw exception text in persisted events.
+
+Final follow-up regression on Windows Python 3.12.10: **136 tests run, 135 passed, 1 Windows symlink-privilege skip**. All three new isolation-boundary simulations and the revised unconfirmed-cancel regression passed. No real provider cancellation was tested.

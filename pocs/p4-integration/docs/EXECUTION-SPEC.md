@@ -159,3 +159,7 @@ are separate tests so unavailable Windows symlink privilege does not mask path c
 ## Provider RPC boundary follow-up
 
 Provider start/result awaits are tracked and bounded by existing tool/run/item deadlines. Role/phase-specific stop codes and lifecycle events are persisted. Uncertain start failure retains recovery rather than retrying ambiguous admission. No automatic retry or real-provider support is introduced. See [provider audit](PROVIDER-BOUNDARY-AUDIT.md) for confirmed defects, retry policy and remaining adapter isolation work.
+
+## Bounded stream cleanup and acknowledgement semantics
+
+Stream cleanup uses a bounded cancel-grace wait rather than an unbounded gather. A surviving stream prevents lease release; stream exceptions fail cleanup without copying raw error text. Cancellation acknowledgement must match the requested job. Missing/malformed acknowledgement requires recovery even if local task termination was observed. Cleanup records acknowledgement status separately from local termination and labels scope `local_cooperative_only`. Acknowledgement does not establish remote cancellation. Later completion cannot clear a sealed recovery result or authorize an automatic retry. See the provider boundary audit for the simulated test scope.
