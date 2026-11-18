@@ -405,6 +405,49 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.handoff())['packet_status'],'complete')
         self.assertEqual(self.stop_calls,1)
 
+    async def test_binary_fragment_metadata_and_close_survive_p4_projection(self):
+        from websockets.frames import Frame,OP_BINARY,OP_CONT,OP_CLOSE
+        ws=load('p4_binary_ws_fixture',BASE/'p2-proxy-relay/tests/test_websocket.py')
+        upstream=ws.WebSocketUpstream();await upstream.start();self.addAsyncCleanup(upstream.close)
+        await self.relay.close()
+        self.relay=Relay(Config(db=self.db,upstream_port=upstream.port,enable_websocket=True,io_timeout=.5))
+        await self.relay.start();self.addAsyncCleanup(self.relay.close)
+        await self.relay.command(dict(schema_version=1,command_id=uuid4().hex,command='ON'))
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        originals=[]
+        reader,writer=await asyncio.open_connection('127.0.0.1',self.relay.port)
+        try:
+            writer.write(ws.REQUEST[:-2]+b'X-QA: QA HANDOFF\r\n\r\n');await writer.drain()
+            await asyncio.wait_for(reader.readuntil(b'\r\n\r\n'),3)
+            for frame in (Frame(OP_BINARY,b'\x00\xfffirst',fin=False),Frame(OP_CONT,b'\x80last'),Frame(OP_CLOSE,b'\x03\xe8')):
+                raw=frame.serialize(mask=True);originals.append(raw)
+                for part in (raw[:1],raw[1:5],raw[5:]):
+                    writer.write(part);await writer.drain();await asyncio.sleep(0)
+                echoed,_=await ws.get_frame(reader)
+                self.assertEqual((echoed.opcode,echoed.fin,echoed.data),(frame.opcode,frame.fin,frame.data))
+            await asyncio.wait_for(reader.read(),3)
+        finally:writer.close();await writer.wait_closed()
+        if self.relay.tasks:await asyncio.wait_for(asyncio.gather(*list(self.relay.tasks)),3)
+        await asyncio.to_thread(self.combined.finish);await self.relay.close()
+        self.files=dict(link=self.engine.j.path/'combined-link.json',route=self.engine.j.path/'route.json',packets=self.db)
+        summary,data=self.read_files(self.files);self.assertEqual(summary['packet_status'],'complete')
+        frames=[packet for packet in data['packets'] if packet['kind']=='websocket_frame' and packet.get('direction')=='client_to_upstream']
+        self.assertEqual(len(frames),3)
+        first,last=frames[:2]
+        self.assertEqual(first['connection_id'],last['connection_id'])
+        self.assertEqual(first['websocket']['message_id'],last['websocket']['message_id'])
+        self.assertEqual([p['websocket']['fragment_index'] for p in frames[:2]],[0,1])
+        self.assertEqual([p['websocket']['message_finished'] for p in frames[:2]],[False,True])
+        self.assertTrue(all(not p['message_context_before_recording'] for p in frames))
+        closed=[p for p in data['packets'] if p['kind']=='websocket_close']
+        self.assertEqual(closed[0]['websocket']['lifecycle'],'closed')
+        grant=PacketGrant(self.db,summary['recording_id'],data['network_recording_id'],summary['source_hashes']['packets'],lambda:None)
+        for packet,raw in zip(frames,originals):
+            read=grant.read(summary['recording_id'],packet['packet_id'],'request')
+            self.assertTrue(read['complete']);self.assertEqual(base64.b64decode(read['data']),raw)
+        self.assertEqual((await self.handoff())['packet_status'],'complete')
+
     async def large_split_http_handoff(self,capture_limit):
         self.relay.config.capture_body_bytes=capture_limit
         body=b'QA HANDOFF'+bytes(range(256))*320

@@ -134,7 +134,9 @@ def _read_artifacts(link_path,route_path,db_path):
                 if seq!=previous_sequence+1:sequence_gaps=True
                 previous_sequence=seq
                 if type(p.get('incomplete')) is not bool:raise ValueError('PACKET_STATE')
-                packets.append({k:p.get(k) for k in ('packet_id','sequence','timestamp','kind','protocol','request','response','incomplete')})
+                packets.append({k:p.get(k) for k in ('packet_id','sequence','timestamp','kind','protocol',
+                    'request','response','incomplete','connection_id','direction','websocket',
+                    'context_before_recording','message_context_before_recording','error','transport','tls')})
             partial=(sequence_gaps or record['status']!='completed' or record.get('network_coverage')!='complete_for_supported_scope'
                      or record.get('persisted_packets')!=count or bool(record.get('gaps')) or any(p['incomplete'] for p in packets))
             summary.update(packet_status='partial' if partial else 'complete',packet_count=count)

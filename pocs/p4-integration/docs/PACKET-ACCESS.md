@@ -38,3 +38,32 @@ All input is synthetic test data in temporary SQLite files generated with P2 Sto
 No existing private packet, real device, network capture, actual model or inspection skill is used. Run test_packet_access.py plus the selected structural suites. Remaining work is actual gateway isolation, model-specific binary tool result handling, private retention, chunked access policy and real authorized packet acceptance; this change is the data access structure only.
 
 Final Windows/Python 3.12.10 validation: 67 selected structural tests passed, zero skips, including 6 new packet-access tests with individual/aggregate byte and audit caps. Private log p4-packet-access-tests.log remains outside Git.
+
+## WebSocket frame context projection
+
+A real loopback regression found that P4 discarded P2's WebSocket context during
+packet projection: direction, connection ID, fragment message ID and lifecycle
+were absent even though the source DB and raw frame BLOBs retained them. P4 now
+passes through the bounded producer fields `connection_id`, `direction`,
+`websocket`, `context_before_recording`, `message_context_before_recording`,
+`error`, `transport` and `tls`, alongside its existing packet fields. Older inputs
+without these optional fields yield null; the reader does not fabricate context.
+These remain untrusted producer metadata, not a new protocol parser or assessment.
+
+The regression sends a binary initial fragment, continuation and normal Close,
+with each masked wire frame split across several application writes. The actual
+relay forwards/echoes bytes, records fragment IDs/indexes and close lifecycle,
+then P1 finishes and P4 reads the sealed collection. The test verifies shared
+connection/message identity, fragment indexes 0/1, message_finished false/true,
+normal close context and exact masked wire bytes through PacketGrant. Existing
+WSS mid-message STOP coverage separately retains partial collection status.
+
+A complete individual frame read does not mean a complete reassembled message:
+consumers must use fragment metadata and collection status. This change does not
+reassemble messages, restore missing fragments, reinterpret binary as text, or
+add app attribution. Context remains private input to the opaque mock executor;
+no raw bytes are added to its saved final result. Metadata may itself be sensitive
+for real traffic and is not public test evidence. No device/model/inspection
+skill/installation is involved.
+
+Frame-context follow-up validation: structure-only suite 151/151 PASS, zero skips (29.703s), existing P2 venv.
