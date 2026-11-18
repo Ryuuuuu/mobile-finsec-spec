@@ -26,10 +26,14 @@
 
 원본 평가기준 엑셀, 평가기준 본문, 고객 앱·패킷·계정·인증서·키·실제 증적은 이 저장소에 포함하지 않습니다. 이 저장소는 자체 작성한 제품 설계와 합성 테스트용 PoC 소스를 관리합니다.
 
-## 독립 PoC 구현
+## 구현 PoC 현황
 
-- [P1: Android 합성 테스트 앱 + PC 입력 기록/Appium 재생](pocs/p1-record-replay/README.md)
-- 클라우드 자동 테스트 27/27 통과 및 APK 빌드 완료. Windows 실기기 인수시험은 별도 검증 대상이며 통과를 주장하지 않습니다.
-- [P2: 독립 HTTP 릴레이 + RECORD/STOP 영속 기록·조회](pocs/p2-proxy-relay/README.md)
-- P2 클라우드 합성 검증 38/38 통과 및 별도 CLI 20건 전달·저장 확인. 제한된 HTTP/1.1만 지원하며 Windows·실기기 routing·TLS는 미검증/미구현입니다.
-- PoC 간 통합, AI 연동과 최종 GPUI 앱은 아직 구현 완료 범위가 아닙니다.
+최신 상태는 [POC → 제품 설계 추적성과 시험 게이트](docs/08-poc-traceability.md)를 참조합니다. 43개 기능과 18개 점검 항목의 구현·모의/로컬·실기기·미검증 상태를 구분합니다.
+
+- [P1](pocs/p1-record-replay/README.md): 선택 QA 앱의 PC 기록/재생과 연속 영상. 특정 native/Canvas 동선의 실기기 시험 통과이며 모든 앱 호환은 아닙니다.
+- [P2](pocs/p2-proxy-relay/README.md): 협조 QA 앱의 HTTP/HTTPS/WS/WSS 및 제한된 OkHttp 경로 검증. 일반 앱 귀속·가로채기 지원은 아닙니다.
+- [P1/P2 통합](pocs/p1-record-replay/docs/COMBINED-RECORDING.md): HTTP 기록과 HTTPS 기록/재생 성공. WSS GUI는 연결 소실로 중단됐고, reverse 소유권 수정 후 실기기 재검증이 남았습니다.
+- [P3](pocs/p3-android-os-tamper/README.md): CHK-07 합성 판정 엔진과 별도 read-only Android probe. 실제 보안 판정 미검증입니다.
+- [P4](pocs/p4-integration/README.md): fake provider와 로컬 P2/P3 실행·이력·취소/복구 경계. 실모델과 GPUI 제품 통합은 미구현/미검증입니다.
+
+초기 문서의 시점별 검증 기록은 보존합니다. POC 성공은 제품 전체 기능 또는 공식 평가 통과를 뜻하지 않습니다.
