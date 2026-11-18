@@ -6,6 +6,7 @@ from .combined import CombinedRun,NetworkStartRejected
 
 class Network:
     def __init__(self,output,pki=None,websocket=False):
+        self.closed=False;self._shutdown_future=None;self._close_error=None;self._close_timeout=15
         sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'p2-proxy-relay'))
         from relay import Config,Relay
         self.loop=asyncio.new_event_loop();self.thread=threading.Thread(target=self.loop.run_forever,daemon=True);self.thread.start()
@@ -57,6 +58,7 @@ class Network:
         if not result['ok']:raise RuntimeError('Network setup failed')
         self.port=result['result']['listen_port']
     def command(self,name,**extra):
+        if self._shutdown_future is not None:raise RuntimeError('Network closing or closed')
         result=asyncio.run_coroutine_threadsafe(self.relay.command(dict(schema_version=1,command_id=uuid.uuid4().hex,command=name,**extra)),self.loop).result(15)
         if (name=='RECORD' and not result['ok'] and result.get('error')=='recording_busy'
                 and not result.get('applied') and not result.get('state_may_have_changed')):
@@ -64,12 +66,30 @@ class Network:
         if not result['ok']:raise RuntimeError('Network command failed: '+str(result.get('error')))
         return result['result']
     def close(self):
+        if self.closed:
+            if self._close_error is not None:raise self._close_error
+            return
         async def shutdown():
-            await self.relay.close();self.server.close();await self.server.wait_closed()
-            for task in list(self.tasks):task.cancel()
-            if self.tasks:await asyncio.gather(*self.tasks,return_exceptions=True)
-        try:asyncio.run_coroutine_threadsafe(shutdown(),self.loop).result(15)
-        finally:self.loop.call_soon_threadsafe(self.loop.stop);self.thread.join(5)
+            try:await self.relay.close()
+            finally:
+                try:self.server.close();await self.server.wait_closed()
+                finally:
+                    for task in list(self.tasks):task.cancel()
+                    if self.tasks:await asyncio.gather(*self.tasks,return_exceptions=True)
+                    await self.loop.shutdown_asyncgens()
+                    await self.loop.shutdown_default_executor()
+        if self._shutdown_future is None:
+            self._shutdown_future=asyncio.run_coroutine_threadsafe(shutdown(),self.loop)
+        try:self._shutdown_future.result(self._close_timeout)
+        except Exception as error:
+            if self._shutdown_future.done():self._close_error=error
+            raise
+        finally:
+            # A wait timeout does not prove cleanup: retain the live loop/future for reconciliation.
+            if self._shutdown_future.done():
+                if self.thread.is_alive():self.loop.call_soon_threadsafe(self.loop.stop);self.thread.join(5)
+                if self.thread.is_alive():raise TimeoutError('Network loop termination unconfirmed')
+                self.loop.close();self.closed=True
 
 class CombinedWindow(MirrorWindow):
     def __init__(self,root,args,network):
@@ -129,7 +149,10 @@ class CombinedWindow(MirrorWindow):
             try:
                 self.sync.abort('Window closed')
             finally:
-                try:self.network.close()
+                try:
+                    try:self.network.close()
+                    except Exception:
+                        self.reservation.poison('Network cleanup not confirmed');raise
                 finally:
                     try:
                         if hasattr(self,'reverse_mapping'):self.reverse_mapping.close()

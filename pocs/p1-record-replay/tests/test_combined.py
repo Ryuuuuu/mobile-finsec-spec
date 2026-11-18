@@ -1,4 +1,4 @@
-import tempfile,unittest,json,threading
+import tempfile,unittest,json,threading,asyncio,sqlite3
 from types import SimpleNamespace
 from unittest.mock import Mock
 from pathlib import Path
@@ -106,6 +106,60 @@ class ReplayTests(CombinedTests):
             self.assertEqual(run.link['input_status'],'failed');self.assertEqual(run.state,'partial')
 
 class NetworkLifecycleTests(unittest.TestCase):
+    def test_relay_close_error_still_releases_fixture_listener_and_loop(self):
+        from pc.combined_ui import Network
+        with tempfile.TemporaryDirectory() as root:
+            network=Network(root)
+            try:
+                network.command('RECORD',device_id='synthetic',app_id='dev.finsec.qa.network')
+                network.relay.store.fail_writes=True
+                with self.assertRaises(sqlite3.OperationalError):network.close()
+                self.assertFalse(network.server.is_serving())
+                self.assertFalse(network.thread.is_alive())
+                self.assertTrue(network.loop.is_closed())
+                future=network._shutdown_future
+                with self.assertRaises(sqlite3.OperationalError):network.close()
+                self.assertIs(network._shutdown_future,future)
+            finally:
+                if not network.thread.is_alive():
+                    network.server.close()
+                    if not network.loop.is_closed():network.loop.close()
+
+    def test_shutdown_timeout_retains_one_cleanup_until_confirmed(self):
+        from pc.combined_ui import Network
+        with tempfile.TemporaryDirectory() as root:
+            network=Network(root);release=threading.Event();original=network.relay.close;calls=[]
+            async def delayed():
+                calls.append('close')
+                await asyncio.to_thread(release.wait)
+                await original()
+            network.relay.close=delayed;network._close_timeout=.03
+            try:
+                with self.assertRaises(TimeoutError):network.close()
+                future=network._shutdown_future
+                self.assertTrue(network.thread.is_alive());self.assertFalse(network.closed)
+                with self.assertRaisesRegex(RuntimeError,'closing'):network.command('STATUS')
+            finally:
+                release.set();network._close_timeout=3;network.close()
+            self.assertIs(network._shutdown_future,future);self.assertEqual(calls,['close'])
+            self.assertTrue(network.closed);self.assertFalse(network.thread.is_alive())
+            network.close()
+
+    def test_window_cleanup_failure_marks_reservation_uncertain(self):
+        from queue import Queue
+        from unittest.mock import patch
+        from pc.combined_ui import CombinedWindow,MirrorWindow
+        window=CombinedWindow.__new__(CombinedWindow)
+        window.closing=False;window.tasks=Queue();window.sync=Mock();window.network=Mock()
+        window.network.close.side_effect=TimeoutError('synthetic pending network cleanup')
+        window.reservation=Mock();window.reverse_mapping=Mock()
+        with patch.object(MirrorWindow,'close'):
+            window.close()
+        cleanup,_=window.tasks.get_nowait()
+        with self.assertRaises(TimeoutError):cleanup()
+        window.reservation.poison.assert_called_once_with('Network cleanup not confirmed')
+        window.reverse_mapping.close.assert_called_once()
+
     def test_lost_start_reply_cleanup_is_scoped_even_after_owner_changes(self):
         from pc.combined_ui import Network
         for replace_owner in (False,True):
