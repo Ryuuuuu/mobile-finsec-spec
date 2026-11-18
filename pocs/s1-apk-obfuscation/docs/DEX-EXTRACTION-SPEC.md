@@ -83,3 +83,13 @@ labels. SDK runs and these constructed materials are identified separately from
 unit fault injection. No device/WebView page execution or native analysis occurs.
 
 Bound total work to 120 seconds and at most 16 root DEX entries in addition to per-call limits. Native/resource counts remain unknown if inventory did not complete. Stage-complete flags never imply whole-application coverage. See DEX-DURABILITY.md for executed scope and limitations.
+
+## Configurable streaming budget revision
+
+The former fixed limits remain defaults, not universal APK assumptions. The real
+DEX CLI now loads a strict explicit budget, streams snapshot/ZIP CRC/hash validation,
+bounds ZIP central metadata before loading, and retains entry metadata rather than
+payload bytes. Disk/free-space and symbol-count budgets join heap/output/deadline
+checks; final JSON is published only after bounded temporary-file writing succeeds.
+See [RESOURCE-BUDGETS.md](RESOURCE-BUDGETS.md) for ranges, measured test scope and
+limitations. This changes only real extraction; the synthetic evaluator stays fixed.

@@ -1,0 +1,16 @@
+{
+  "apk_mib": 64,
+  "entry_mib": 8,
+  "expanded_mib": 64,
+  "disk_mib": 128,
+  "min_free_mib": 64,
+  "tool_output_mib": 4,
+  "heap_mib": 256,
+  "total_seconds": 120,
+  "tool_seconds": 30,
+  "max_entries": 1024,
+  "max_dex_files": 16,
+  "compression_ratio": 200,
+  "central_directory_mib": 4,
+  "symbol_records": 10000
+}

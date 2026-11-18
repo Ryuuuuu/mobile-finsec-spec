@@ -68,8 +68,9 @@ class CoverageTests(unittest.TestCase):
         self.assertEqual(r['coverage']['dex_inventory'],'not_run')
 
     def test_oversize_input_records_limit_and_does_not_start_tool(self):
-        with patch.object(o,'MAX_APK',10),patch.object(d,'run_tool') as tool:
-            r=d.analyze(self.apk,Path('not-executed'),self.tools,['qa.Logic'],self.root/'out')
+        with zipfile.ZipFile(self.apk,'a') as archive:archive.writestr('assets/padding.bin',b'x'*(2*1024*1024))
+        with patch.object(d,'run_tool') as tool:
+            r=d.analyze(self.apk,Path('not-executed'),self.tools,['qa.Logic'],self.root/'out',d.Limits(apk_mib=1))
         tool.assert_not_called()
         self.assertEqual(r['reason_code'],'INPUT_LIMIT')
         self.assertEqual(r['failure_stage'],'inventory')

@@ -84,3 +84,13 @@ inventories, selected-class provenance, partial extraction and explicit unassess
 native/WebView/resource scope. A WebView reference or `.so` ZIP filename is not an
 analysis result. Two-DEX and ~24 MiB padded QA APKs passed actual SDK extraction;
 >32 MiB input is rejected. All security verdicts remain inconclusive.
+
+### Explicit resource budgets
+
+The real extraction CLI now accepts `--budget profiles/qa-64mib.json` (or a reviewed
+private budget). Defaults still reject APKs above 32 MiB; raising the APK cap requires
+an explicit finite setting and does not relax other guards. Input copying and ZIP
+CRC/hash inventory are streamed rather than retaining entire APK/entry bodies.
+See [resource budget design and validation](docs/RESOURCE-BUDGETS.md) for finite
+ranges, disk/time/memory-accounting limits, synthetic tests and the actual ~36 MiB
+QA extraction. These are not measured finance-app coverage or product performance.

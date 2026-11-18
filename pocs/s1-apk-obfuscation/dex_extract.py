@@ -8,20 +8,23 @@ import subprocess
 import time
 import zipfile
 
-from obfuscation import MAX_APK, bounded, digest, inventory
+from obfuscation import MAX_APK, bounded, digest, decode
+from apk_budget import Limits, ResourceError, MIB, snapshot_inventory, storage_guard
 
 
 class AnalysisError(ValueError):
     pass
 
 
-def run_tool(command, folder, label, timeout=30, limit=4*1024*1024):
+def run_tool(command, folder, label, timeout=30, limit=4*1024*1024, storage_check=None):
     stdout=folder/(label+'.stdout');stderr=folder/(label+'.stderr')
     with stdout.open('xb') as out,stderr.open('xb') as err:
+        if storage_check:storage_check()
         child=subprocess.Popen([str(x) for x in command],stdout=out,stderr=err,shell=False)
         deadline=time.monotonic()+timeout
         try:
             while child.poll() is None:
+                if storage_check:storage_check()
                 if stdout.stat().st_size+stderr.stat().st_size > limit:
                     raise AnalysisError('TOOL_OUTPUT_LIMIT')
                 if time.monotonic()>deadline:
@@ -29,6 +32,7 @@ def run_tool(command, folder, label, timeout=30, limit=4*1024*1024):
                 time.sleep(0.02)
             if stdout.stat().st_size+stderr.stat().st_size > limit:
                 raise AnalysisError('TOOL_OUTPUT_LIMIT')
+            if storage_check:storage_check()
             if child.returncode:
                 raise AnalysisError('TOOL_FAILED')
         finally:
@@ -37,17 +41,19 @@ def run_tool(command, folder, label, timeout=30, limit=4*1024*1024):
     return stdout.read_text(encoding='utf-8')
 
 
-def parse_packages(text):
+def parse_packages(text, max_records=10000):
     classes=[];methods=[];fields=[]
     for line in text.splitlines():
         if not line.strip():continue
         match=re.fullmatch(r'([PCMF]) ([dkrx]) (\d+)\s+(\d+)\s+(\d+)\s+(.+)',line.strip())
         if not match:raise AnalysisError('UNSUPPORTED_PACKAGE_FORMAT')
         kind,state,defined,referenced,size,name=match.groups()
+        if len(name)>512:raise AnalysisError('SYMBOL_LENGTH_LIMIT')
         if state!='d':continue
         if kind=='C':classes.append(name)
         elif kind=='M':methods.append(name)
         elif kind=='F':fields.append(name)
+        if len(classes)+len(methods)+len(fields)>max_records:raise AnalysisError('SYMBOL_RECORD_LIMIT')
     if not classes or len(set(classes))!=len(classes):raise AnalysisError('NO_OR_DUPLICATE_CLASSES')
     for member in methods+fields:
         if member.split(' ',1)[0] not in classes:raise AnalysisError('MEMBER_WITHOUT_CLASS')
@@ -66,7 +72,23 @@ def smali_summary(text, selected):
                 source_name_present=bool(re.search(r'^\.source ',text,re.M)))
 
 
-def analyze(apk, java, tools, selected, output):
+def save_result(output,result,limits):
+    temporary=output/'result.json.tmp'
+    with temporary.open('xb') as stream:
+        buffer=bytearray()
+        for chunk in json.JSONEncoder(indent=2,ensure_ascii=False,allow_nan=False).iterencode(result):
+            buffer.extend(chunk.encode('utf-8'))
+            if len(buffer)>=65536:
+                storage_guard(output,limits,len(buffer),reserve=0)
+                stream.write(buffer);buffer.clear()
+        if buffer:
+            storage_guard(output,limits,len(buffer),reserve=0)
+            stream.write(buffer)
+    temporary.replace(output/'result.json')
+
+
+def analyze(apk, java, tools, selected, output, limits=None):
+    limits=(limits or Limits()).validate()
     output=Path(output);output.mkdir(parents=True,exist_ok=False)
     result=dict(schema_version='1.0',check_id='CHK-15',synthetic=False,
                 execution_status='failed',verdict='inconclusive',reason_code='ANALYSIS_INCOMPLETE',
@@ -75,15 +97,16 @@ def analyze(apk, java, tools, selected, output):
                     whole_application='not_assessed',native=dict(status='not_analyzed',entry_count=None),
                     webview=dict(status='not_analyzed',reference_signal='unknown'),
                     resources=dict(status='not_analyzed',web_asset_count=None)),
-                limits=dict(apk_bytes=MAX_APK,tool_timeout_seconds=30,tool_output_bytes=4*1024*1024,total_seconds=120,max_dex_files=16),
+                limits=limits.snapshot(),
                 limitations=['Actual DEX evidence only; no security verdict or semantic readability scoring.',
                     'No signature verification, native/resource analysis, runtime or whole-app coverage.',
                     'Direct Java timeout management is not a hostile-parser OS sandbox.'])
-    deadline=time.monotonic()+120
+    deadline=time.monotonic()+limits.total_seconds
     def invoke(command,label):
         remaining=deadline-time.monotonic()
         if remaining<=0:raise AnalysisError('ANALYSIS_TIMEOUT')
-        return run_tool(command,output,label,timeout=min(30,remaining))
+        return run_tool(command,output,label,timeout=min(limits.tool_seconds,remaining),
+                        limit=limits.tool_output_mib*MIB,storage_check=lambda:storage_guard(output,limits))
     stage='preflight'
     try:
         if (not selected or len(selected)>20 or len(set(selected))!=len(selected)
@@ -95,21 +118,20 @@ def analyze(apk, java, tools, selected, output):
         result['tool']=dict(package='Android SDK Command-line Tools',revision='19.0',
             launcher_jar_sha256=digest(bounded(jar,MAX_APK)))
         stage='inventory'
-        info,entries=inventory(apk)
+        info,entries=snapshot_inventory(apk,output,limits,deadline)
+        result['artifact_snapshot']='complete_and_zip_validated'
         result['inventory']=info
         result['coverage']['native'].update(entry_count=info['native_entries'],presence_basis='ZIP paths only, not ELF validation')
         result['coverage']['resources']['web_asset_count']=sum(n.endswith(('.js','.html','.htm')) for n in entries)
         result['coverage']['nonstandard_dex_entries']=[n for n in entries if n.endswith('.dex') and not re.fullmatch(r'classes(?:[2-9]|[1-9][0-9]+)?\.dex',n)]
-        raw=bounded(apk,MAX_APK)
-        if digest(raw)!=info['artifact_sha256']:raise AnalysisError('ARTIFACT_CHANGED')
-        snapshot=output/'input.apk';snapshot.write_bytes(raw)
-        prefix=[java,'-Xmx256m','-Dcom.android.sdklib.toolsdir='+str(Path(tools).resolve()),'-cp',jar,
+        snapshot=output/'input.apk'
+        prefix=[java,f'-Xmx{limits.heap_mib}m','-Dcom.android.sdklib.toolsdir='+str(Path(tools).resolve()),'-cp',jar,
                 'com.android.tools.apk.analyzer.ApkAnalyzerCli']
         stage='dex-list'
         dexlist=invoke([*prefix,'dex','list',snapshot],'dex-list')
         dexnames=[line.strip().lstrip('/') for line in dexlist.splitlines() if line.strip()]
         expected=sorted(n for n in entries if re.fullmatch(r'classes(?:[2-9]|[1-9][0-9]+)?\.dex',n))
-        if len(expected)>16:raise AnalysisError('DEX_COUNT_LIMIT')
+        if len(expected)>limits.max_dex_files:raise AnalysisError('DEX_COUNT_LIMIT')
         if not dexnames or sorted(dexnames)!=expected:raise AnalysisError('DEX_LIST_MISMATCH')
         result['coverage']['dex_inventory']='complete'
         result['coverage']['dex_defined']='partial'
@@ -118,9 +140,11 @@ def analyze(apk, java, tools, selected, output):
         for index,dexname in enumerate(dexnames):
             stage='dex-packages:'+dexname
             text=invoke([*prefix,'dex','packages','--defined-only','--files',dexname,snapshot],f'packages-{index}')
-            parsed=parse_packages(text)
+            parsed=parse_packages(text,limits.symbol_records)
             if set(all_classes).intersection(parsed['classes']):raise AnalysisError('DUPLICATE_CLASS_ACROSS_DEX')
-            result['dex_files'].append(dict(name=dexname,sha256=digest(entries[dexname]),**parsed))
+            if len(all_classes)+len(all_methods)+len(all_fields)+parsed['class_count']+parsed['method_count']+parsed['field_count']>limits.symbol_records:
+                raise AnalysisError('SYMBOL_RECORD_LIMIT')
+            result['dex_files'].append(dict(name=dexname,sha256=entries[dexname]['sha256'],**parsed))
             all_classes.extend(parsed['classes']);all_methods.extend(parsed['methods']);all_fields.extend(parsed['fields'])
         result['defined']=dict(classes=all_classes,methods=all_methods,fields=all_fields,
             class_count=len(all_classes),method_count=len(all_methods),field_count=len(all_fields),
@@ -140,8 +164,11 @@ def analyze(apk, java, tools, selected, output):
         result.update(execution_status='completed',reason_code='DEX_EVIDENCE_NOT_SECURITY_VERDICT')
     except (OSError,ValueError,TypeError,RuntimeError,zipfile.BadZipFile,NotImplementedError) as exc:
         known_limits={'INPUT_LIMIT','EXPANSION_LIMIT','ENTRY_LIMIT'}
-        result['reason_code']=str(exc) if isinstance(exc,AnalysisError) or str(exc) in known_limits else 'INPUT_OR_TOOL_ERROR'
+        result['reason_code']=str(exc) if isinstance(exc,(AnalysisError,ResourceError)) or str(exc) in known_limits else 'INPUT_OR_TOOL_ERROR'
         result['failure_stage']=stage
+        if 'artifact_snapshot' not in result:
+            result['artifact_snapshot']='partial_or_rejected'
+    result['retained_snapshot_bytes']=(output/'input.apk').stat().st_size if (output/'input.apk').exists() else 0
     result['coverage']['unextracted_selected_classes']=[name for name in (selected or []) if name not in {r['class_name'] for r in result['selected']}]
     def file_hash(path):
         hasher=hashlib.sha256()
@@ -150,8 +177,7 @@ def analyze(apk, java, tools, selected, output):
         return hasher.hexdigest()
     result['evidence']=[dict(file=p.name,sha256=file_hash(p),bytes=p.stat().st_size)
                         for p in sorted(output.iterdir()) if p.suffix in {'.stdout','.stderr'}]
-    with (output/'result.json').open('x',encoding='utf-8') as stream:
-        json.dump(result,stream,indent=2,ensure_ascii=False)
+    save_result(output,result,limits)
     return result
 
 
@@ -162,10 +188,16 @@ def main():
     parser.add_argument('--tools',type=Path,required=True)
     parser.add_argument('--class',dest='selected',action='append',required=True)
     parser.add_argument('--output',type=Path,required=True)
+    parser.add_argument('--budget',type=Path,help='Explicit finite resource budget JSON; defaults remain conservative')
     args=parser.parse_args()
-    try:result=analyze(args.apk,args.java,args.tools,args.selected,args.output)
-    except OSError:
-        print('OUTPUT_UNAVAILABLE_OR_EXISTS');return 2
+    try:
+        limits=Limits.from_dict(decode(bounded(args.budget,16384))) if args.budget else Limits()
+    except (OSError,ValueError,TypeError):
+        print('INVALID_OR_UNAVAILABLE_BUDGET');return 2
+    try:
+        result=analyze(args.apk,args.java,args.tools,args.selected,args.output,limits)
+    except (OSError,ResourceError):
+        print('OUTPUT_NOT_SAVED_OR_EXISTS');return 2
     print(json.dumps({k:result[k] for k in ('execution_status','verdict','reason_code')}))
     return 0 if result['execution_status']=='completed' else 2
 

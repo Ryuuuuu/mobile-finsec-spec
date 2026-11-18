@@ -134,3 +134,5 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 [S1 실제 SDK 검증](../pocs/s1-apk-obfuscation/docs/DEX-VALIDATION.md): 동일 R8 8.9.27로 만든 직접 작성 QA APK 2개에서 class/member와 선택 클래스 smali를 실제 추출했다. 이름 변경은 mapping과 일치했고 조건 2개·QA 문자열 3개는 양쪽에서 관찰됐다. 보안 판정은 양쪽 모두 inconclusive다. 28개 회귀 통과와 실제 SDK 추출을 구분하며, 이전 ‘실제 분석 미구현’ 중 DEX 근거 추출 부분만 갱신한다. 의미 분석·실제 앱 보호 판정·서명/Android 실행·제품 통합은 여전히 미검증/미구현이다.
 
 S1 [내구성 후속](../pocs/s1-apk-obfuscation/docs/DEX-DURABILITY.md): 실제 두 DEX/24 MiB 패딩 QA APK 추출, 크기 제한 거부와 강제 JVM timeout을 검증했다. 37개 회귀 통과. native/WebView/resource는 명시적으로 미분석이며, 패딩 APK는 대형 코드/메서드 성능 시험이 아니다.
+
+S1 [자원 예산 후속](../pocs/s1-apk-obfuscation/docs/RESOURCE-BUDGETS.md): 기본 32 MiB는 유지하되 명시적인 64 MiB 예산으로 약 36 MiB 패딩 QA APK의 실제 SDK 추출을 확인했다. 스트리밍 ZIP/해시 처리, 압축·메타데이터·디스크·시간·심볼 상한과 부분 실패를 검증했고 51개 회귀가 통과했다. 금융 APK 표본 호환율, 대형 코드 성능, 전체 프로세스 RSS 보장은 측정하지 않았다.

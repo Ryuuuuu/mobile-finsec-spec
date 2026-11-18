@@ -80,13 +80,17 @@ class DexTests(unittest.TestCase):
         result=d.analyze(apk,Path('none'),tools,['qa.Logic'],self.root/'version')
         self.assertEqual(result['reason_code'],'UNSUPPORTED_TOOL_VERSION')
 
-    def test_input_change_between_inventory_and_copy_is_rejected(self):
-        tools,apk=self.setup_analysis();original=d.bounded
-        def changed(path,limit):return b'changed' if Path(path)==apk else original(path,limit)
-        with patch.object(d,'bounded',side_effect=changed):
+    def test_snapshot_isolated_from_later_source_change(self):
+        tools,apk=self.setup_analysis();original=d.snapshot_inventory
+        def changed(*args):
+            result=original(*args)
+            apk.write_bytes(b'later source change')
+            return result
+        with patch.object(d,'snapshot_inventory',side_effect=changed), patch.object(d,'run_tool',side_effect=['classes.dex',PACKAGES,SMALI]):
             result=d.analyze(apk,Path('none'),tools,['qa.Logic'],self.root/'changed')
-        self.assertEqual(result['reason_code'],'ARTIFACT_CHANGED')
-        self.assertFalse((self.root/'changed/input.apk').exists())
+        self.assertEqual(result['execution_status'],'completed')
+        self.assertEqual(d.digest((self.root/'changed/input.apk').read_bytes()),result['inventory']['artifact_sha256'])
+        self.assertNotEqual(d.digest(apk.read_bytes()),result['inventory']['artifact_sha256'])
 
 
 if __name__=='__main__':unittest.main()

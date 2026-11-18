@@ -88,3 +88,5 @@ partial-result faults without requiring the SDK. Raw APKs, stderr/smali, hashes 
 private matrix output are not published.
 
 Final Windows/Python 3.12.10 regression: **37 tests passed, zero skips**. Actual SDK matrix: 3 completed/inconclusive constructed APK cases, one expected oversize rejection, and one separately injected actual-JVM timeout with owned-process reaping. This count is not real-app or native/WebView runtime acceptance.
+
+The later [configurable budget revision](RESOURCE-BUDGETS.md) retains these limits as defaults and adds explicit bounded opt-in plus streaming input. The earlier >32 MiB rejection remains the default behavior, not an unconditional limit for every future invocation.
