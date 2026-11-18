@@ -169,3 +169,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [GPUI contract alignment via mock UI](docs/UI-CONTRACT-BRIDGE.md) tests record/check/result projections, live cursor behavior, finalized history, disconnected/partial/cancel states. No GPUI implementation is claimed.
 
 [Native GPUI preparation](docs/GPUI-NATIVE-PREPARATION.md) records missing build prerequisites, a read-only probe and a reproducible mock screen/API integration plan. Native compilation and rendering remain not run.
+
+[Serialized UI boundary and Rust preparation](docs/UI-WIRE-PREPARATION.md): actual Python JSON round-trip tests pass; independent Rust state/test metadata compiles. No GPUI window or cross-process transport is claimed.

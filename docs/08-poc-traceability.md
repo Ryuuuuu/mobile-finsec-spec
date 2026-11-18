@@ -190,3 +190,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Native GPUI preparation boundary
 
 [Build prerequisites and vertical-slice plan](../pocs/p4-integration/docs/GPUI-NATIVE-PREPARATION.md): Rust/Cargo, MSVC tools and CMake were unavailable in the build terminal. Native compilation/window/transport integration were not run. A Python discovery probe preserves existing PowerShell policy; no installation, inspection logic or device changes.
+
+### Serialized UI boundary / Rust preparation
+
+[Mock JSON handoff and Rust guard](../pocs/p4-integration/docs/UI-WIRE-PREPARATION.md) adds executed Python integration tests and Rust metadata-only compilation. Rust/CMake are now installed; MSVC approval remains pending. GPUI rendering, Rust test execution and authenticated IPC remain unverified.
