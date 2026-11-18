@@ -93,3 +93,15 @@ P1의 기기 사용 종료 후 별도 승인된 QA 앱/build, 정상 서비스 b
 보호 서비스와 차단 원인 oracle, 단일 기기 소유·취소·복원 계약을 먼저 확정해야 합니다.
 그 후 실제 어댑터를 별도 구현·검증합니다. 현재 결과는 그 검증을 대체하지 않습니다.
 공식 원본의 ID·버전·적용 플랫폼 대조도 별도 게이트입니다.
+
+## Read-only Android observation entry point
+
+The original `os_tamper` CLI and CHK-07 manifest/skills remain synthetic-only. A separate `android_probe` module implements the [read-only extension](docs/ANDROID-READONLY-SPEC.md). It collects bounded, allowlisted Android environment observations without modifying device settings or opening an app/Appium session. It always reports CHK-07 `inconclusive`: these properties cannot establish stock/tampered attestation or protected-service behavior.
+
+```powershell
+python -m android_probe --adb C:\Tools\platform-tools\adb.exe --device YOUR_SERIAL --output C:\QA\new-private-p3-run
+```
+
+The sibling P1 source is required for the shared device lease. Stop P1 and verify any failed cleanup before running; active/quarantine markers are never automatically cleared. Keep results private. Exit 0 means observation collection completed, not a security pass; 5 means not run, 3 timeout, 4 cancellation, 2 tool/storage failure. Missing properties remain unknown.
+
+Follow-up verification is documented in [read-only validation](docs/ANDROID-READONLY-VALIDATION.md).

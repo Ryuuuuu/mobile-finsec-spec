@@ -28,7 +28,7 @@ class SyntheticPocTests(unittest.TestCase):
         self.counter = 0
 
     def fixture(self, name="pass"):
-        return json.loads((ROOT / "fixtures" / f"{name}.json").read_text())
+        return json.loads((ROOT / "fixtures" / f"{name}.json").read_text(encoding="utf-8"))
 
     def output(self):
         self.counter += 1
@@ -316,14 +316,14 @@ class SyntheticPocTests(unittest.TestCase):
     def test_modified_aos_skill_hash_rejected(self):
         directory = self.contract_copy()
         path = directory / "aos" / "SKILL.md"
-        path.write_text(path.read_text() + "\nSynthetic changed rule.\n")
+        path.write_text(path.read_text(encoding="utf-8") + "\nSynthetic changed rule.\n", encoding="utf-8")
         with self.assertRaises(ContractError):
             load_contract(directory)
 
     def test_manifest_unknown_version_rejected(self):
         directory = self.contract_copy()
         path = directory / "manifest.yaml"
-        manifest = json.loads(path.read_text())
+        manifest = json.loads(path.read_text(encoding="utf-8"))
         manifest["schema_version"] = "999"
         self.rewrite(path, manifest)
         with self.assertRaises(ContractError):
@@ -341,7 +341,7 @@ class SyntheticPocTests(unittest.TestCase):
     def test_manifest_required_policies_and_schema_references_rejected_when_missing(self):
         directory = self.contract_copy()
         path = directory / "manifest.yaml"
-        original = json.loads(path.read_text())
+        original = json.loads(path.read_text(encoding="utf-8"))
         for field in ("steps", "fixture_schema", "result_schema", "side_effect_policy",
                       "idempotency_policy", "initial_state_verification"):
             with self.subTest(field=field):
@@ -354,9 +354,9 @@ class SyntheticPocTests(unittest.TestCase):
     def test_skill_rule_conflict_rejected_even_with_updated_hash(self):
         directory = self.contract_copy()
         path = directory / "aos" / "SKILL.md"
-        original_content = path.read_text()
+        original_content = path.read_text(encoding="utf-8")
         manifest_path = directory / "manifest.yaml"
-        original_manifest = json.loads(manifest_path.read_text())
+        original_manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
         changes = (("CHK-07.synthetic.v1", "CHK-07.synthetic.conflicting"),
                    ('"synthetic":true', '"synthetic":1'))
         for before, after in changes:
@@ -430,13 +430,13 @@ class SyntheticPocTests(unittest.TestCase):
         result, output = self.execute(fixture)
         self.assertEqual(result["started_at"], fixture["timestamp"])
         self.assertEqual(result["ended_at"], "2026-11-16T00:00:00.020123Z")
-        events = [json.loads(line) for line in (output / "events.jsonl").read_text().splitlines()]
+        events = [json.loads(line) for line in (output / "events.jsonl").read_text(encoding="utf-8").splitlines()]
         self.assertEqual(events[0]["timestamp"], fixture["timestamp"])
 
     def test_unknown_manifest_field_and_text_rule_conflicts_rejected(self):
         directory = self.contract_copy()
         path = directory / "manifest.yaml"
-        original = json.loads(path.read_text())
+        original = json.loads(path.read_text(encoding="utf-8"))
         for field in ("unexpected", "pass_rule", "fail_rule", "inconclusive_rule"):
             with self.subTest(field=field):
                 manifest = deepcopy(original)
@@ -489,14 +489,14 @@ class SyntheticPocTests(unittest.TestCase):
             with self.subTest(field=field, value=value):
                 _, output = self.execute()
                 path = output / "evidence-index.json"
-                index = json.loads(path.read_text())
+                index = json.loads(path.read_text(encoding="utf-8"))
                 index["evidence"][0][field] = value
                 self.rewrite(path, index)
                 with self.assertRaises(ContractError):
                     validate_bundle(output)
         _, output = self.execute()
         path = output / "evidence-index.json"
-        index = json.loads(path.read_text())
+        index = json.loads(path.read_text(encoding="utf-8"))
         index["evidence"].append(deepcopy(index["evidence"][0]))
         self.rewrite(path, index)
         with self.assertRaises(ContractError):
@@ -548,7 +548,10 @@ class SyntheticPocTests(unittest.TestCase):
         target = self.base / "synthetic-outside.json"
         target.write_bytes(blob.read_bytes())
         blob.unlink()
-        blob.symlink_to(target)
+        try:blob.symlink_to(target)
+        except OSError as error:
+            if getattr(error,'winerror',None)==1314:self.skipTest('Windows symlink privilege unavailable; no security setting changed')
+            raise
         with self.assertRaises(ContractError):
             validate_bundle(output)
 
@@ -568,7 +571,7 @@ class SyntheticPocTests(unittest.TestCase):
             with self.subTest(field=field):
                 _, output = self.execute(self.fixture("fail"))
                 path = output / "result.json"
-                result = json.loads(path.read_text())
+                result = json.loads(path.read_text(encoding="utf-8"))
                 result[field] = value
                 self.rewrite(path, result)
                 with self.assertRaises(ContractError):
@@ -577,7 +580,7 @@ class SyntheticPocTests(unittest.TestCase):
     def test_result_unknown_evidence_reference_rejected(self):
         _, output = self.execute()
         path = output / "result.json"
-        result = json.loads(path.read_text())
+        result = json.loads(path.read_text(encoding="utf-8"))
         result["evidence_refs"].append("synthetic-no-such-evidence")
         self.rewrite(path, result)
         with self.assertRaises(ContractError):
@@ -588,14 +591,14 @@ class SyntheticPocTests(unittest.TestCase):
             with self.subTest(mutation=mutation):
                 _, output = self.execute()
                 path = output / "events.jsonl"
-                events = [json.loads(line) for line in path.read_text().splitlines()]
+                events = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines()]
                 if mutation == "duplicate":
                     events.append(deepcopy(events[0]))
                 elif mutation == "reverse":
                     events.reverse()
                 else:
                     events[0]["run_id"] = "synthetic-another-run"
-                path.write_text("".join(json.dumps(event) + "\n" for event in events))
+                path.write_text("".join(json.dumps(event) + "\n" for event in events), encoding="utf-8")
                 with self.assertRaises(ContractError):
                     validate_bundle(output)
 
