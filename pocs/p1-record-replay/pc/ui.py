@@ -171,6 +171,7 @@ class Window:
             j.write('intent',operation=name); self.adapter.click(elements[0]); j.write('result',status='dispatch_acknowledged')
         self.submit(work,lambda _:self.status.set('Maintenance dispatched; initial state will be checked before record/replay.'))
     def record(self):
+        if self.engine.mode!='idle':self.status.set('Recording/replay already active or incomplete; no new recording started');return
         if self.adapter.package!=p.PACKAGE:
             try:
                 self.engine.initial_condition=self.post(); p.condition(self.engine.initial_condition,self.adapter.package)

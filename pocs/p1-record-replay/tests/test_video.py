@@ -37,3 +37,36 @@ class VideoProtocolTest(unittest.TestCase):
         current.paste('black',(200,200,216,216))
         with self.assertRaises(ValueError):verify_pixels(original,png(current))
         with self.assertRaises(ValueError):verify_pixels(original,png(current.resize((256,256))))
+
+
+class MirrorBoundaryTest(unittest.TestCase):
+    def test_letterbox_mapping_after_resize(self):
+        from types import SimpleNamespace
+        from pc.ui import Window
+        window=SimpleNamespace(image=True,frame={'display':(800,800,360,780)})
+        self.assertEqual(Window.point(window,SimpleNamespace(x=400,y=400)),[.5,.5])
+        with self.assertRaises(ValueError):Window.point(window,SimpleNamespace(x=10,y=400))
+        window.frame['display']=(1200,900,400,880)
+        self.assertEqual(Window.point(window,SimpleNamespace(x=600,y=450)),[.5,.5])
+    def test_release_blocks_resize_rotation_and_disconnect(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock,patch
+        from pc.mirror import MirrorWindow
+        for resized,error,generation in ((True,None,2),(False,None,3),(False,'EOF',2)):
+            with self.subTest(resized=resized,error=error,generation=generation):
+                w=SimpleNamespace(gesture_frame={'at':0,'generation':2,'size':(1080,2340)},
+                    frame={'display':(800,800,360,780),'geometry':{'width':1080,'height':2340}},
+                    gesture_display=(900,800,360,780) if resized else (800,800,360,780),
+                    video=SimpleNamespace(snapshot=lambda:(None,error,generation)),start_point=[.5,.5],status=Mock())
+                with patch('pc.ui.Window.release') as dispatch:
+                    MirrorWindow.release(w,SimpleNamespace(x=400,y=400))
+                    dispatch.assert_not_called()
+                self.assertIsNone(w.start_point);w.status.set.assert_called_once()
+
+    def test_duplicate_record_does_not_abort_existing_run(self):
+        from types import SimpleNamespace
+        from unittest.mock import Mock
+        from pc.ui import Window
+        for mode in ('recording','replaying','incomplete'):
+            w=SimpleNamespace(engine=SimpleNamespace(mode=mode),status=Mock(),submit=Mock())
+            Window.record(w);w.submit.assert_not_called();w.status.set.assert_called_once()

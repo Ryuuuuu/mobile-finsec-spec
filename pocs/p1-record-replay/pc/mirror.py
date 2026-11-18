@@ -78,11 +78,12 @@ class MirrorWindow(Window):
         self.root.after(100,self.video_tick)
     def press(self,event):
         if not self.frame:self.status.set('Target input unavailable');return
-        self.gesture_frame=self.video_frame
+        self.gesture_frame=self.video_frame;self.gesture_display=tuple(self.frame['display'])
         super().press(event)
     def release(self,event):
         try:
             if self.gesture_frame is None or not self.frame:raise ValueError('Input frame unavailable')
+            if tuple(self.frame['display'])!=self.gesture_display:raise ValueError('Canvas resized during gesture; input blocked')
             _,error,generation=self.video.snapshot()
             if error:raise ValueError('Video disconnected')
             mapping(dict(self.gesture_frame,at=time.monotonic()),self.frame['geometry'],time.monotonic(),generation)
