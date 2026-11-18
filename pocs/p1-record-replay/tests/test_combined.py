@@ -114,7 +114,7 @@ class NetworkLifecycleTests(unittest.TestCase):
                 with self.assertRaises(FileNotFoundError):Network(root,pki=Path(root)/'missing-pki')
 
     def test_timed_out_setup_exposes_same_cleanup_owner(self):
-        from pc.combined_ui import Network
+        from pc.combined_ui import Network,NetworkController
         from unittest.mock import patch
         import sys
         sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'p2-proxy-relay'))
@@ -126,17 +126,70 @@ class NetworkLifecycleTests(unittest.TestCase):
             _setup_timeout=.03
             _close_timeout=.03
         with tempfile.TemporaryDirectory() as root,patch.object(Relay,'start',delayed):
-            owner=None
+            owner=None;controller=NetworkController(ShortNetwork)
             try:
-                with self.assertRaisesRegex(RuntimeError,'cleanup unconfirmed') as caught:ShortNetwork(root)
+                with self.assertRaisesRegex(RuntimeError,'cleanup unconfirmed') as caught:controller.start(root)
                 owner=caught.exception.cleanup_network
+                self.assertIs(controller.network,owner)
+                with self.assertRaises(TimeoutError):controller.close()
+                with self.assertRaisesRegex(RuntimeError,'already owned'):controller.start(root)
+                self.assertEqual(calls,['start'])
                 self.assertTrue(owner.thread.is_alive());self.assertFalse(owner.closed)
                 with self.assertRaisesRegex(RuntimeError,'closing'):owner.command('ON')
             finally:
                 release.set()
-                if owner is not None:owner._close_timeout=3;owner.close()
-            self.assertEqual(calls,['start']);self.assertTrue(owner.closed)
+                if owner is not None:owner._close_timeout=3;controller.close()
+            self.assertIsNone(controller.network)
+            ShortNetwork._setup_timeout=3;ShortNetwork._close_timeout=3
+            fresh=controller.start(root);controller.close();self.assertTrue(fresh.closed)
+            self.assertEqual(calls,['start','start']);self.assertTrue(owner.closed)
             self.assertFalse(owner.server.is_serving());self.assertFalse(owner.thread.is_alive())
+
+    def test_startup_cleanup_retains_owner_and_retries_without_new_start(self):
+        from pc.combined_ui import startup_cleanup
+        from unittest.mock import patch
+        import time
+        owner=Mock();owner.close.side_effect=[TimeoutError('pending'),None]
+        callbacks=[];root=Mock();button=Mock();destroyed=[]
+        root.after.side_effect=lambda delay,callback:callbacks.append(callback)
+        root.destroy.side_effect=lambda:destroyed.append(True)
+        def mainloop():
+            deadline=time.monotonic()+3
+            while not destroyed and time.monotonic()<deadline:
+                if callbacks:callbacks.pop(0)()
+                elif owner.close.call_count==1:
+                    root.protocol.call_args.args[1]()
+                time.sleep(.001)
+            self.assertTrue(destroyed)
+        root.mainloop.side_effect=mainloop
+        with patch('pc.combined_ui.tk.StringVar'),patch('pc.combined_ui.ttk.Label'),patch('pc.combined_ui.ttk.Button',return_value=button):
+            startup_cleanup(root,owner)
+        self.assertEqual(owner.close.call_count,2);owner.start.assert_not_called()
+
+    def test_controller_blocks_concurrent_duplicate_start(self):
+        from pc.combined_ui import Network,NetworkController
+        from concurrent.futures import ThreadPoolExecutor
+        with tempfile.TemporaryDirectory() as root:
+            controller=NetworkController();gate=threading.Barrier(2)
+            def start():
+                gate.wait()
+                try:return controller.start(root)
+                except RuntimeError:return None
+            try:
+                with ThreadPoolExecutor(2) as pool:
+                    results=list(pool.map(lambda _:start(),range(2)))
+                self.assertEqual(sum(item is not None for item in results),1)
+                self.assertIs(controller.network,next(item for item in results if item is not None))
+            finally:controller.close()
+
+    def test_controller_terminal_cleanup_error_stays_blocked(self):
+        from pc.combined_ui import NetworkController
+        network=Mock(closed=True);network.close.side_effect=OSError('synthetic storage failure')
+        factory=Mock(return_value=network);controller=NetworkController(factory);controller.start()
+        for _ in range(2):
+            with self.assertRaises(OSError):controller.close()
+            with self.assertRaisesRegex(RuntimeError,'already owned'):controller.start()
+        self.assertIs(controller.network,network);factory.assert_called_once()
 
     def test_invalid_output_startup_releases_resources_before_retry(self):
         from pc.combined_ui import Network

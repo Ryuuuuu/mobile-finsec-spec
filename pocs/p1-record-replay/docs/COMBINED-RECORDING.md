@@ -117,3 +117,30 @@ For a timed-out setup, cleanup waits for the original setup future before closin
 An automatic GUI recovery controller, persistence across process exit, arbitrary OS allocation failure and permanent stuck transport remain unimplemented/unverified. Callers must retain/reconcile the exposed pending owner rather than treating the constructor exception as proof that resources were never created. This follow-up supersedes the earlier constructor-failure gap for the tested paths only.
 
 Validation: test_combined.py 28/28 PASS (2.396s), with ResourceWarning promoted to error; no pending-task/unclosed-resource warning in the final log. Uses actual local Network/Relay, a real invalid directory target, a preflight-order guard and a controlled startup delay. No GUI, device, model, installation or inspection skill execution. P4's unrelated structural suite was not rerun.
+
+### Startup cleanup owner integration (offline structural follow-up)
+
+The combined launcher now creates a `NetworkController` before network startup.
+It retains `cleanup_network` from an uncertain constructor failure. While an owner
+is retained, duplicate starts are rejected; one lock serializes startup and cleanup.
+Only a successful close with `closed=True` clears ownership. A terminal storage
+error remains blocked even if its thread has stopped: resource termination does
+not prove successful recording finalization.
+
+For a failed network constructor with retained ownership, the launcher keeps a
+cleanup-only Tk window alive. Retry and window-close requests reconcile the same
+owner in a worker; they do not create another session. Tk polling updates the UI
+on the main thread. Successful cleanup closes this failure window; it does not
+automatically restart recording. Repeated clicks while cleanup is running are
+ignored. There is no force-release path for terminal errors.
+
+Validation: 31 combined tests passed, with ResourceWarning treated as an error.
+Actual loopback Network/Relay tests cover delayed initialization, cleanup timeout,
+blocked replacement, confirmed cleanup then retry, and concurrent duplicate start.
+A mock owner covers terminal error retention; fake Tk widgets/event callbacks cover
+cleanup retry and closure without a display. These are not live GUI/device tests.
+This ownership is process-local, not a cross-process lock or durable recovery
+record. Forced process termination loses the controller. Normal established-window
+cleanup still follows the existing reservation/poison path; this change specifically
+handles network-constructor failure before CombinedWindow exists. P4 and real
+inspection skills were not changed or retested.

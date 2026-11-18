@@ -109,6 +109,54 @@ class Network:
                 if self.thread.is_alive():raise TimeoutError('Network loop termination unconfirmed')
                 self.loop.close();self.closed=True
 
+class NetworkController:
+    """One local owner; no replacement while an instance or cleanup is retained."""
+    def __init__(self,factory=Network):
+        self.factory=factory;self.network=None;self.lock=threading.Lock()
+    def start(self,*args,**kwargs):
+        with self.lock:
+            if self.network is not None:raise RuntimeError('Network already owned; reconcile cleanup before restart')
+            try:self.network=self.factory(*args,**kwargs)
+            except Exception as error:
+                self.network=getattr(error,'cleanup_network',None)
+                raise
+            return self.network
+    def close(self):
+        with self.lock:
+            if self.network is None:return
+            # Even a terminal close error is not a successful reconciliation.
+            self.network.close()
+            if not self.network.closed:raise RuntimeError('Network cleanup unconfirmed')
+            self.network=None
+
+
+def startup_cleanup(root,owner):
+    """Keep the startup owner reachable; closing this window also retries cleanup."""
+    import queue
+    results=queue.Queue();busy=False
+    status=tk.StringVar(value='Startup failed. No new session can start until owned cleanup succeeds.')
+    ttk.Label(root,textvariable=status,wraplength=500).pack()
+    def retry():
+        nonlocal busy
+        if busy:return
+        busy=True;button.configure(state='disabled');status.set('Reconciling the existing cleanup; no new session is started.')
+        def work():
+            try:owner.close();results.put(None)
+            except Exception as error:results.put(type(error).__name__)
+        threading.Thread(target=work,daemon=True).start()
+        root.after(100,poll)
+    def poll():
+        nonlocal busy
+        try:error=results.get_nowait()
+        except queue.Empty:root.after(100,poll);return
+        busy=False
+        if error is None:root.destroy();return
+        status.set('Cleanup not confirmed ('+error+'). Retry cleanup; restarting is blocked.')
+        button.configure(state='normal')
+    button=ttk.Button(root,text='Retry cleanup',command=retry);button.pack()
+    root.protocol('WM_DELETE_WINDOW',retry)
+    retry();root.mainloop()
+
 class CombinedWindow(MirrorWindow):
     def __init__(self,root,args,network):
         self.network=network;self.sync=None;self.abort_pending=False
@@ -189,7 +237,13 @@ def main():
     pathlib.Path(args.output).mkdir(parents=True,exist_ok=True)
     root=tk.Tk()
     if not messagebox.askyesno('Combined QA fixture','Start whole-device video and the disposable QA loopback fixture? Input requires an approved Appium session. No global proxy or CA is changed.',parent=root):root.destroy();return
-    network=Network(args.output,args.pki if args.protocol in ('https','wss','okhttp-https') else None,args.protocol in ('ws','wss'));window=CombinedWindow(root,args,network)
+    owner=NetworkController()
+    try:network=owner.start(args.output,args.pki if args.protocol in ('https','wss','okhttp-https') else None,args.protocol in ('ws','wss'))
+    except Exception:
+        if owner.network is not None:startup_cleanup(root,owner)
+        else:root.destroy()
+        raise
+    window=CombinedWindow(root,args,network)
     try:window.prepare_fixture(args.protocol)
     except Exception:
         window.close();root.mainloop();raise
