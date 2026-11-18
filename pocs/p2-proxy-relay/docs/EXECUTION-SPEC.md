@@ -119,3 +119,16 @@ P4를 repo 루트에서 처음 실행한 경우 import 경로 오류 2개가 있
 공식 참고: [Python SSL](https://docs.python.org/3.12/library/ssl.html),
 [asyncio streams](https://docs.python.org/3.12/library/asyncio-stream.html),
 [websockets Sans-I/O](https://websockets.readthedocs.io/en/16.0/reference/sansio/server.html).
+
+## Additive v1 recording scope (cooperative clients)
+
+RECORD optionally accepts `recording_id` (1-128 ASCII letters/digits/underscore/dot/colon/hyphen). When omitted, the relay keeps generating an ID. A supplied ID must not already exist in the database, including terminal records after restart; otherwise `recording_id_exists` prevents overwriting prior evidence. The existing command ID/digest journal still returns the original result for an identical retry, and rejects payload changes. These are identity and idempotency rules, not authentication.
+
+STOP optionally accepts `expected_recording_id` with the same syntax. Under the existing command lock, a different active record produces `recording_scope_mismatch` before any state change. A matching active record follows the existing seal/drain/store path. With no active record it is a no-op (`status=idle`, `scope_matched=false`) and does not claim a completed capture. An identical old STOP command replay returns its stored historical result without stopping a later record. A new command ID with an old expected recording ID is refused while another record is active.
+
+Compatibility: old RECORD and unscoped STOP payloads remain valid and existing schema/database versions remain 1 (optional command fields, no table migration). Unscoped STOP deliberately retains its old global behavior, including relay-owned shutdown. This is not protection from an untrusted client that omits the scope or knows another record ID. Enforcing exclusive ownership would require capability/authentication and migration away from unscoped mutation. The local API is not made safe for arbitrary independent clients by this change.
+
+Updated P1 generates/persists the intended ID before dispatch and includes it on normal/abort/replay STOP. A lost start acknowledgement can therefore trigger one scoped compensation attempt. If the record was replaced meanwhile, cleanup reports uncertainty and leaves the replacement untouched. No automatic unscoped fallback is permitted. Older P2 peers reject the added fields, so upgraded P1 and P2 must be deployed together; capability negotiation/downgrade is not implemented. This does not settle an arbitrarily delayed remote RECORD that arrives after a no-op STOP; general remote reconciliation still needs stable request tracking and protocol ordering guarantees.
+
+Local tests cover same-command retry, distinct-command ID reuse after restart, wrong-owner STOP, historical STOP retry against a newer record, idle no-op, malformed scope and legacy unscoped behavior. Actual P1 Network/Relay tests inject a lost applied RECORD reply both before and after another client replaces the recording. No device, real app or model is involved.
+Validation on Windows: P1 combined tests 22/22 PASS (2.076s), P2 relay tests 37/37 PASS (10.226s), actual CLI WSS protocol 1/1 PASS (5.111s), P4 structural tests 132/132 PASS zero skips (23.500s).

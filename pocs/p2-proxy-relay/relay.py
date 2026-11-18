@@ -655,8 +655,11 @@ class Relay:
             return envelope(error='invalid_command')
         cmd = payload['command']
         extra = {'device_id', 'app_id'} if cmd == 'RECORD' else set()
-        if payload.keys() != required | extra or type(payload['schema_version']) is not int or payload['schema_version'] != VERSION:
+        optional = {'recording_id'} if cmd == 'RECORD' else {'expected_recording_id'} if cmd == 'STOP' else set()
+        if not required | extra <= payload.keys() or payload.keys() - (required | extra | optional) or type(payload['schema_version']) is not int or payload['schema_version'] != VERSION:
             return envelope(error='invalid_command')
+        if any(not isinstance(payload[key],str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}',payload[key]) for key in optional & payload.keys()):
+            return envelope(error='invalid_recording_scope')
         if cmd not in ('ON', 'OFF', 'RECORD', 'STOP', 'STATUS') or not isinstance(payload['command_id'], str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', payload['command_id']):
             return envelope(error='invalid_command')
         if cmd == 'RECORD' and any(not isinstance(payload[key], str) or not re.fullmatch(r'[A-Za-z0-9_.:-]{1,128}', payload[key]) for key in extra):
@@ -734,7 +737,10 @@ class Relay:
                 raise ValueError('recording_busy')
             if self.relay_state not in ('on', 'off'):
                 raise ValueError('relay_not_ready')
-            record = dict(schema_version=VERSION, recording_id=uid(), session_id=self.session_id, run_id=None,
+            recording_id=payload.get('recording_id') or uid()
+            exists=await self.store.run(lambda:self.store.conn.execute('SELECT 1 FROM recordings WHERE id=?',(recording_id,)).fetchone())
+            if exists:raise ValueError('recording_id_exists')
+            record = dict(schema_version=VERSION, recording_id=recording_id, session_id=self.session_id, run_id=None,
                           event_id=uid(), timestamp=now(), started_at=now(), monotonic_start=time.monotonic(),
                           status='recording', network_coverage='unknown' if self.relay_state == 'on' else 'none',
                           supported_scope=self.supported_scope, parser_version=PARSER, counters=counter_set(), gaps=[],
@@ -759,7 +765,11 @@ class Relay:
             self.last_recording = record
             return dict(recording_id=record['recording_id'], status='recording')
         if cmd == 'STOP':
+            expected=payload.get('expected_recording_id')
+            if expected is not None and self.active_recording and self.active_recording['recording_id']!=expected:
+                raise ValueError('recording_scope_mismatch')
             if not self.active_recording:
+                if expected is not None:return dict(recording_id=expected,status='idle',scope_matched=False)
                 return dict(recording_id=self.last_recording['recording_id'] if self.last_recording else None, status='idle')
             record = self.active_recording
             self.active_recording = None  # seal without awaiting storage or drain

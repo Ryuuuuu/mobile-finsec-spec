@@ -141,6 +141,30 @@ class RelayAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         return (await self.ok_command("RECORD", device_id="synthetic-loopback",
                                       app_id="dev.finsec.synthetic"))["recording_id"]
 
+    async def test_scoped_stop_and_record_id_reuse(self):
+        await self.ok_command('ON')
+        args=dict(device_id='synthetic',app_id='dev.finsec.synthetic',recording_id='qa-owner-a')
+        first=await self.ok_command('RECORD',command_id='start-owner-a',**args)
+        self.assertEqual(first['recording_id'],'qa-owner-a')
+        self.assertEqual(await self.ok_command('RECORD',command_id='start-owner-a',**args),first)
+        rejected=await self.command('STOP',expected_recording_id='qa-owner-b')
+        self.assertEqual(rejected['error'],'recording_scope_mismatch')
+        self.assertEqual(self.relay.active_recording['recording_id'],'qa-owner-a')
+        await self.ok_command('STOP',command_id='stop-owner-a',expected_recording_id='qa-owner-a')
+        await self.make_relay();await self.ok_command('ON')
+        self.assertEqual((await self.command('RECORD',**args))['error'],'recording_id_exists')
+        await self.ok_command('RECORD',device_id='synthetic',app_id='dev.finsec.synthetic',recording_id='qa-owner-b')
+        # A retried old STOP returns its old result, never stops the newer recording.
+        await self.ok_command('STOP',command_id='stop-owner-a',expected_recording_id='qa-owner-a')
+        self.assertEqual(self.relay.active_recording['recording_id'],'qa-owner-b')
+        await self.ok_command('STOP')  # Legacy unscoped compatibility is explicit, not ownership enforcement.
+
+    async def test_scope_validation_and_idle_noop(self):
+        for value in (None,'',True,'../outside'):
+            self.assertEqual((await self.command('STOP',expected_recording_id=value))['error'],'invalid_recording_scope')
+        result=await self.ok_command('STOP',expected_recording_id='qa-never-started')
+        self.assertEqual(result['status'],'idle');self.assertFalse(result['scope_matched'])
+
     def read(self, kind, **kwargs):
         result = query(self.db, kind=kind, **kwargs)
         self.assertTrue(result["ok"], result)

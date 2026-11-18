@@ -1,5 +1,6 @@
 """Explicit start/stop barrier for P1 input and P2 recording; no atomicity claim."""
 from .core import Journal,atomic
+from uuid import uuid4
 
 class NetworkStartRejected(RuntimeError):
     """The adapter confirms RECORD did not apply; do not stop another recording."""
@@ -10,11 +11,19 @@ class CombinedRun:
         self.input_start=engine.start;self.input_finish=engine.finish;self.input_replay=getattr(engine,"replay",None);self.preflight=lambda:None
         self.network_start_attempted=False
     def start_network(self):
+        recording_id='p1-'+uuid4().hex
+        self.link['network_recording_id']=recording_id
+        self.save()  # Persist intended scope before dispatch, including uncertain acknowledgements.
         self.network_start_attempted=True
-        try:return self.network.command('RECORD',device_id='selected-device',app_id=self.engine.a.package)
+        try:
+            result=self.network.command('RECORD',device_id='selected-device',app_id=self.engine.a.package,recording_id=recording_id)
+            if result.get('recording_id')!=recording_id:raise RuntimeError('Network RECORD scope mismatch')
+            return result
         except NetworkStartRejected:
             self.network_start_attempted=False
             raise
+    def stop_network(self):
+        return self.network.command('STOP',expected_recording_id=self.link['network_recording_id'])
     def save(self):
         atomic(self.j.path/'combined.json',dict(self.link,status=self.state))
         if self.engine.j and self.engine.j.id==self.link.get('input_recording_id'):atomic(self.engine.j.path/'combined-link.json',dict(self.link,status=self.state))
@@ -39,7 +48,7 @@ class CombinedRun:
         self.state='stopping';self.j.write('input_closed');self.save()
         try:
             self.stop_attempted=True
-            result=self.network.command('STOP');self.link['network_stop']=result
+            result=self.stop_network();self.link['network_stop']=result
             self.j.write('network_stop_ack',coverage=result.get('network_coverage'))
             self.input_finish()
             complete=self.engine.record['status']=='completed' and result.get('network_coverage')=='complete_for_supported_scope'
@@ -63,7 +72,7 @@ class CombinedRun:
             result=self.input_replay(route)
             self.link['input_recording_id']=result['run_id'];self.link['input_status']=result['status']
             self.state='stopping';self.j.write('input_closed');self.save();self.stop_attempted=True
-            stopped=self.network.command('STOP');self.link['network_stop']=stopped
+            stopped=self.stop_network();self.link['network_stop']=stopped
             self.j.write('network_stop_ack',coverage=stopped.get('network_coverage'))
             complete=result['status']=='succeeded' and stopped.get('network_coverage')=='complete_for_supported_scope'
             self.state='completed' if complete else 'partial'
@@ -81,7 +90,7 @@ class CombinedRun:
             else:
                 if self.stop_attempted:raise TimeoutError('STOP outcome remains uncertain; no automatic retry')
                 self.stop_attempted=True
-                self.link['network_stop']=self.network.command('STOP')
+                self.link['network_stop']=self.stop_network()
                 self.j.write('network_abort_stop_ack')
         except Exception:
             self.link['network_stop_uncertain']=True;self.j.write('network_stop_uncertain')

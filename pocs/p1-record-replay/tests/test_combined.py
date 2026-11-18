@@ -14,7 +14,7 @@ class CombinedTests(unittest.TestCase):
         network=Mock()
         def command(name,**kw):
             if name==fail:raise TimeoutError('injected lost acknowledgement')
-            return {'recording_id':'net-1'} if name=='RECORD' else {'network_coverage':'complete_for_supported_scope'}
+            return {'recording_id':kw['recording_id']} if name=='RECORD' else {'network_coverage':'complete_for_supported_scope'}
         network.command.side_effect=command
         return CombinedRun(engine,network,root),engine,network
     def test_preflight_failure_preserves_previous_record(self):
@@ -27,7 +27,7 @@ class CombinedTests(unittest.TestCase):
     def test_start_barrier_ids_and_stop_completion(self):
         with tempfile.TemporaryDirectory() as root:
             run,engine,network=self.make(root);run.start();self.assertEqual(run.state,'active')
-            self.assertEqual(run.link['input_recording_id'],engine.j.id);self.assertEqual(run.link['network_recording_id'],'net-1')
+            self.assertEqual(run.link['input_recording_id'],engine.j.id);self.assertTrue(run.link['network_recording_id'].startswith('p1-'))
             run.finish();saved=json.loads((run.j.path/'combined.json').read_text())
             self.assertEqual(saved['status'],'completed')
             events=[json.loads(s)['event'] for s in (run.j.path/'events.jsonl').read_text().splitlines()]
@@ -106,6 +106,34 @@ class ReplayTests(CombinedTests):
             self.assertEqual(run.link['input_status'],'failed');self.assertEqual(run.state,'partial')
 
 class NetworkLifecycleTests(unittest.TestCase):
+    def test_lost_start_reply_cleanup_is_scoped_even_after_owner_changes(self):
+        from pc.combined_ui import Network
+        for replace_owner in (False,True):
+            with self.subTest(replaced=replace_owner),tempfile.TemporaryDirectory() as root:
+                network=Network(root)
+                try:
+                    run,engine,_=CombinedTests().make(root);real_command=network.command;seen=[]
+                    def command(name,**kw):
+                        seen.append((name,kw))
+                        reply=real_command(name,**kw)
+                        if name=='RECORD':
+                            if replace_owner:
+                                real_command('STOP',expected_recording_id=kw['recording_id'])
+                                real_command('RECORD',device_id='synthetic',app_id='dev.finsec.qa.network',recording_id='qa-other-owner')
+                            raise TimeoutError('synthetic lost applied RECORD reply')
+                        return reply
+                    network.command=command;run.network=network
+                    with self.assertRaises(TimeoutError):run.start()
+                    scope=seen[0][1]['recording_id']
+                    self.assertEqual(seen[1],('STOP',{'expected_recording_id':scope}))
+                    self.assertEqual(len(seen),2)
+                    active=real_command('STATUS')['active_recording']
+                    if replace_owner:
+                        self.assertEqual(active['recording_id'],'qa-other-owner')
+                        self.assertTrue(run.link['network_stop_uncertain'])
+                    else:self.assertIsNone(active)
+                finally:network.close()
+
     def test_failed_start_does_not_stop_existing_network_recording(self):
         from pc.combined_ui import Network
         for fail_preflight in (False,True):
