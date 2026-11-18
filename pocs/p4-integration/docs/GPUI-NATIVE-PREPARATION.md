@@ -2,7 +2,7 @@
 
 ## Current verified state (2026-11-18 follow-up)
 
-Using persisted Machine/User PATH, the read-only probe now discovers Rust/Cargo/rustup and CMake: rustc/cargo 1.100.0 and CMake 4.5.0 executed successfully. cl remains unavailable and the usual Visual Studio Installer discovery path is absent. MSVC installation/license approval is still deferred. Rust metadata-only compilation was previously successful; native executable linking, GPUI build/rendering and Rust-Python IPC remain unverified. No new installation or security setting change occurred in this follow-up.
+Using persisted Machine/User PATH, the read-only probe now discovers Rust/Cargo/rustup and CMake: rustc/cargo 1.100.0 and CMake 4.5.0 executed successfully. cl remains unavailable and the usual Visual Studio Installer discovery path is absent. MSVC installation/license approval is still deferred. Rust metadata-only compilation was previously successful. A subsequent [narrow no_std native pipe probe](NATIVE-RUST-PIPE.md) now links and runs with the bundled LLVM linker and exchanges messages with Python. Normal std/GPUI build/rendering and Rust HTTP integration remain unverified. No new installation or security setting change occurred in this follow-up.
 
 The originally proposed adapter now has a [minimal mock loopback implementation](LOOPBACK-API.md) tested with real local TCP. This does not establish native UI integration. The following original observation is historical, before the Rust/CMake installation.
 

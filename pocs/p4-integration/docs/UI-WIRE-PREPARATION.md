@@ -31,7 +31,7 @@ Success uses the existing mock-ui.v1 envelope. Start/inspect/cancel wrap API dat
 
 ## Evidence and remaining gates
 
-The JSON tests described here are in-process only. Subsequent [Python-to-Python pipe tests](MOCK-STDIO.md) executed real child-process communication, response deadlines, shutdown and cleanup/restart handling. Those later results do not establish Rust-to-Python IPC or native GPUI execution.
+The JSON tests described here are in-process only. Subsequent [Python-to-Python pipe tests](MOCK-STDIO.md) executed real child-process communication, response deadlines, shutdown and cleanup/restart handling. Those Python-only results do not establish Rust-to-Python IPC or native GPUI execution. A subsequent, separate [native no_std pipe gate](NATIVE-RUST-PIPE.md) establishes limited Rust-Python round trips; full Rust HTTP/GPUI remains unverified.
 
 Three new Python async tests **executed and passed**: serialized recording/preflight/start/live/final-history flow, duplicate command reuse, bounded/invalid requests and sanitized errors, cancellation, and history with no connected mock device. These use real facade/runner code with opaque mock skills and synthetic artifacts; no inspection content or assessment logic is added.
 

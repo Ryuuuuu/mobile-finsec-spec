@@ -39,14 +39,16 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 
 [Native GPUI preparation](docs/GPUI-NATIVE-PREPARATION.md) records missing build prerequisites, a read-only probe and a reproducible mock screen/API integration plan. Native compilation and rendering remain not run.
 
-[Serialized UI boundary and Rust preparation](docs/UI-WIRE-PREPARATION.md) covers in-process Python JSON tests and Rust metadata-only compilation. Subsequent [Python-to-Python pipe tests](docs/MOCK-STDIO.md) verify actual child-process communication and cleanup; Rust-to-Python IPC and native GPUI remain unverified.
+[Serialized UI boundary and Rust preparation](docs/UI-WIRE-PREPARATION.md) covers in-process Python JSON tests and Rust metadata-only compilation. Subsequent [Python-to-Python pipe tests](docs/MOCK-STDIO.md) verify actual child-process communication and cleanup; Rust HTTP/native GPUI remain unverified; the later limited native pipe gate is linked below.
 
 ## Historical demos (not current instructions)
 
 The previous P2/P3-coupled architecture, full-suite command and CLI examples are retained only in [the archived README](docs/LEGACY-P4-README.md). They predate the structure-only user instruction and must not be used as current acceptance.
 
-[Actual mock child-process IPC](docs/MOCK-STDIO.md) tests Python-to-Python private pipes, EOF, forced termination, restart admission persistence and selected synthetic P1/P2 artifact handoff. Rust-Python IPC remains unverified.
+[Actual mock child-process IPC](docs/MOCK-STDIO.md) tests Python-to-Python private pipes, EOF, forced termination, restart admission persistence and selected synthetic P1/P2 artifact handoff. The later native Rust pipe smoke gate is linked below.
 
 [Mock loopback API](docs/LOOPBACK-API.md) validates actual local TCP authentication, token rotation, bounded/versioned requests, correlation and transport shutdown. Rust/GPUI remain unverified; subsequent cross-process HTTP evidence is linked below.
 
 [Python HTTP child lifecycle](docs/HTTP-CHILD-LIFECYCLE.md) tests private-pipe bootstrap credentials, actual separate-process HTTP, in-progress shutdown and restart protection. This is not native desktop integration.
+
+[Native Rust–Python pipe gate](docs/NATIVE-RUST-PIPE.md) builds and runs a narrow Windows no_std executable using the already bundled LLVM linker: 6 shared Rust guard checks, 3 direct Python round trips and 3 invalid-input cases. Cargo/libtest, Rust HTTP and GPUI remain unverified.

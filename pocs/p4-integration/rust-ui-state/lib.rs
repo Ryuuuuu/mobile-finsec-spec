@@ -1,4 +1,5 @@
 //! GPUI-independent response gating, not a window or a transport client.
+mod response_guard;
 #[derive(Clone, Copy, PartialEq, Debug)]
 pub enum Tab { Record, Check, Results }
 
@@ -20,12 +21,8 @@ impl Selection {
     }
 
     pub fn accepts(&self, contract: &str, project: &str, generation: u64, run: Option<&str>) -> bool {
-        contract == "mock-ui.v1" && project == self.project && generation == self.generation
-            && match (self.run.as_deref(), run) {
-                (Some(expected), Some(actual)) => expected == actual,
-                (Some(_), None) => false,
-                _ => true,
-            }
+        response_guard::accepts(&self.project, self.generation, self.run.as_deref(),
+                                contract, project, generation, run)
     }
 }
 
