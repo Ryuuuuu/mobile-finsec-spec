@@ -53,3 +53,7 @@ Use a new output PKI directory: the generator refuses to overwrite an existing o
 `requirements-device.txt` adds cryptography 50.0.2 solely for private test PKI generation. The existing test fixture can use this generator when OpenSSL CLI is absent, so Windows TLS/WSS tests no longer need to be silently left behind. The PKI regression checks localhost identity, server-auth purpose, short validity and refusal to overwrite keys. Final Windows/Python 3.12 run: **75 tests passed, zero skips**, including the previously skipped TLS/WSS suites. These are automated localhost tests and remain distinct from the real-device cases above.
 
 Not accepted: ordinary third-party application interception, mixed-app attribution, transparent/CONNECT proxying, WebView/OkHttp differences, HTTP/2/3/QUIC, certificate pinning bypass, physical USB removal/reconnect, simultaneous P1/P2 GUI start/stop, or production trust/CA lifecycle. A future global routing or trust-store change requires separate concrete approval. Existing approved hidden API/helper settings were not changed by this P2 workflow.
+
+## Integrated GUI follow-up
+
+The dedicated app now also exposes native and WebView HTTP buttons for [P1/P2 combined GUI recording](../../p1-record-replay/docs/COMBINED-RECORDING.md). The new WebView cleartext exception is scoped to this app's loopback domain. The existing noninteractive HTTP/HTTPS/WS/WSS device cases were rerun successfully after the APK update. Combined-GUI TLS and OkHttp are still unverified.
