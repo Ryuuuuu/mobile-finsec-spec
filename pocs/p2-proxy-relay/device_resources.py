@@ -37,6 +37,7 @@ class OwnedReverse:
         rows=[]
         for line in result.stdout.splitlines():
             fields=line.split()
+            if not fields:continue # ADB may append blank separator lines.
             if len(fields)!=3:raise ReverseUncertain('Unexpected reverse mapping response')
             rows.append((fields[1],fields[2]))
         return rows

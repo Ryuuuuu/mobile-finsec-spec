@@ -1,14 +1,16 @@
-# Native GPUI vertical slice: blocked before compilation
+# Native GPUI preparation: Windows build and input smoke verified
 
-## Current verified state (2026-11-18 follow-up)
+## Current verified state (2026-11-18 installation follow-up)
 
-Using persisted Machine/User PATH, the read-only probe now discovers Rust/Cargo/rustup and CMake: rustc/cargo 1.100.0 and CMake 4.5.0 executed successfully. cl remains unavailable and the usual Visual Studio Installer discovery path is absent. MSVC installation/license approval is still deferred. Rust metadata-only compilation was previously successful. A subsequent [narrow no_std native pipe probe](NATIVE-RUST-PIPE.md) now links and runs with the bundled LLVM linker and exchanges messages with Python. Normal std/GPUI build/rendering and Rust HTTP integration remain unverified. No new installation or security setting change occurred in this follow-up.
+After user-approved Microsoft Build Tools 2022 17.14.45 / MSVC and Windows SDK installation, discovery reports complete, launchable and no reboot required. Persisted Machine/User PATH executes Rust/Cargo 1.100.0 and CMake 4.5.0. An ordinary std Rust executable compiled, linked and ran. `rustc --test rust-ui-state/lib.rs` ran 1 test successfully; the separate response_guard module has no standalone tests.
 
-The originally proposed adapter now has a [minimal mock loopback implementation](LOOPBACK-API.md) tested with real local TCP. This does not establish native UI integration. The following original observation is historical, before the Rust/CMake installation.
+The isolated [native smoke](../gpui-smoke/src/main.rs) pins gpui-kit 0.10.0 and includes the resolved Cargo.lock. `cargo build --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml` succeeded in 3m30s on this machine. Launch the resulting `target/debug/finsec-gpui-smoke.exe`: its Korean/English label and Verify button are exposed through Windows accessibility; an actual click changed the counter from 2 to 3. This verifies native window/input state, not the proposed three-tab application or Python API integration. A screenshot while another window covered it was not treated as rendering evidence. Source startup follows the official Apache-2.0 [example](https://gpui-kit.com/docs/getting-started/). Dependency distribution/license review remains a product task.
+
+The [mock loopback API](LOOPBACK-API.md) and earlier [narrow native pipe probe](NATIVE-RUST-PIPE.md) remain distinct results. The smoke has no Python transport, device/model, inspection skill or verdict logic. Full GPUI record/check/results integration remains unimplemented. The following observations are historical, before installation.
 
 ## Original observed boundary
 
-On 2026-11-18 the Windows build terminal could not discover `rustc`, `cargo`, `rustup`, `cl` or `cmake`. The usual user Cargo/rustup directories, Visual Studio Installer discovery executable and CMake executable were absent. This establishes that this terminal is not prepared; it does not prove no alternate installation exists anywhere on disk. No Cargo manifest currently exists in this project.
+On 2026-11-18 the Windows build terminal could not discover `rustc`, `cargo`, `rustup`, `cl` or `cmake`. The usual user Cargo/rustup directories, Visual Studio Installer discovery executable and CMake executable were absent. This establishes that this terminal is not prepared; it does not prove no alternate installation exists anywhere on disk. At that time no Cargo manifest existed in this project.
 
 The read-only [preflight](../scripts/gpui_preflight.py) returned `blocked_prerequisites` and exit code 2. Compilation, dependency resolution, native window rendering and Rust-to-Python integration were **not run**, rather than failed builds. No native implementation or Cargo.lock is presented as verified. The previous 89 structural tests concern Python mocks, not GPUI compatibility. No device/model, inspection skill or judgement logic was executed or added.
 

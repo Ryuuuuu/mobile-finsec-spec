@@ -23,6 +23,20 @@ class ReverseTests(unittest.TestCase):
         self.assertEqual(a.allocate(),'41001');self.assertEqual(b.allocate(),'41002')
         b.close();a.verify();self.assertEqual(adb.maps,{'tcp:41001':'tcp:50001'});a.close();self.assertEqual(adb.maps,{})
         self.assertFalse(any('tcp:0' in c or '--remove-all' in c for c in adb.calls))
+    def test_blank_adb_separator_lines_allow_allocate_verify_and_cleanup(self):
+        adb=FakeAdb()
+        def runner(argv,**kwargs):
+            result=adb(argv,**kwargs)
+            if argv[4]=='--list':result.stdout='\r\n'+result.stdout+'  \r\n'
+            return result
+        owned=OwnedReverse('adb','synthetic',50001,runner,[41001])
+        self.assertEqual(owned.allocate(),'41001');owned.verify();owned.close()
+        self.assertEqual(adb.maps,{})
+    def test_nonempty_malformed_row_still_blocks_cleanup(self):
+        adb=FakeAdb();owned=OwnedReverse('adb','synthetic',50001,adb,[41001]);owned.allocate()
+        owned.runner=Mock(return_value=SimpleNamespace(returncode=0,stdout='unexpected\n',stderr=''))
+        with self.assertRaises(ReverseUncertain):owned.close()
+        self.assertEqual(adb.maps,{'tcp:41001':'tcp:50001'})
     def test_changed_mapping_is_never_removed(self):
         adb=FakeAdb();a=OwnedReverse('adb','synthetic',50001,adb,[41001]);a.allocate();adb.maps['tcp:41001']='tcp:50002'
         with self.assertRaises(ReverseUncertain):a.close()

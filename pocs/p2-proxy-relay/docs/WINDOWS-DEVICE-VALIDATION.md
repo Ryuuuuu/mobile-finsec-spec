@@ -1,5 +1,13 @@
 # Windows and Android transport validation — 2026-11-18
 
+## Authorized QA app resume (2026-11-18 follow-up)
+
+Actual A34 / dedicated `dev.finsec.qa.network` app -> owned explicit reverse port -> local relay/upstream passed HTTP, HTTPS, WS, WSS, OkHttp HTTP and OkHttp HTTPS. Each protocol captured 3 recorded transactions, excluded pre/post requests and returned matching synthetic echoes. HTTP variants stored 3 rows; WS variants stored 21 rows including frames. This is cooperating QA-app correlation, not arbitrary-app interception or OS-level attribution, and not a fresh P1 GUI replay test. TLS validation remained enabled with the existing still-valid private QA PKI; no OS trust/proxy setting changed.
+
+The first resume exposed an actual parser defect: `adb reverse --list` appended a blank separator line after its valid mapping. OwnedReverse treated it as malformed, stopped before app traffic and retained an uncertain mapping. The parser now ignores whitespace-only rows while still rejecting nonempty malformed rows. Exact owned mapping recovery preceded retry; no remove-all operation. All 13 device-resource regression tests passed, including blank CRLF rows through allocate/verify/close and malformed-row cleanup rejection.
+
+After the successful six-protocol run, reverse mappings were empty. Existing QA receipt bytes were restored and compared exactly using an exit-confirmed `adb shell -T` write followed by `exec-out`; the initial exec-in write did not establish a successful byte restore. Existing user-maintained hidden API and mock-location values were unchanged. Actual receipts, serials, private PKI and packet databases remain local only. Previous stale lease markers were archived after owner/server shutdown and exclusive-lock verification, not silently ignored.
+
 ## Measured scope
 
 Windows 11 / Python 3.12.10 used a dedicated venv with `websockets==16.0` from official PyPI. `python -m unittest discover -s tests -q` ran **58 tests: 56 passed, 2 class-setup skips** because the OpenSSL CLI was unavailable. These skips prevent a claim of full TLS/WSS coverage on Windows. No certificates were installed in Windows or Android trust stores.
