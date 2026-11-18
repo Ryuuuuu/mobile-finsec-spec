@@ -182,3 +182,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Integrated structural acceptance
 
 [Selection-to-history acceptance](../pocs/p4-integration/docs/INTEGRATED-STRUCTURE.md) joins mock inventory/skills, actual-format synthetic P1/P2 files, live logs, packet access and sealed multi-run history. 85 structural tests passed. Corrected missing recording selection handoff and restart-lost admission tracking. Local child exit was tested; real device/model/security checks and OS reboot were not.
+
+### GPUI contract alignment via mock UI
+
+[Screen/API mapping](../pocs/p4-integration/docs/UI-CONTRACT-BRIDGE.md) compares approved record/check/result flows against P1/P2 source readers and P4 start/live/history contracts. Mock UI tests cover finalized-only results, cursors/late responses and no-device/partial/cancel states. Actual GPUI, device/model execution and production authenticated transport remain unimplemented/unverified.

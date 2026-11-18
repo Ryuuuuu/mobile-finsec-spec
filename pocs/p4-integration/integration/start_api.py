@@ -49,7 +49,7 @@ def preflight(request,inventory,catalog,lease_state='free'):
 class StartAPI:
     def __init__(self,supervisor,inventory,catalog,recordings=None):
         self.supervisor=supervisor;self.inventory=deepcopy(inventory);self.catalog=deepcopy(catalog)
-        self.commands={};self.jobs={}
+        self.commands={};self.jobs={};self.execution_runs={}
         self.recordings=deepcopy(recordings or {})
         self.ledger=supervisor.root/'commands.sqlite'
         with closing(sqlite3.connect(self.ledger)) as c:
@@ -89,7 +89,7 @@ class StartAPI:
         def available():
             # Recheck authoritative mock selection after lease and while running.
             return preflight(request,self.inventory,self.catalog)['enabled']
-        task=asyncio.create_task(self.supervisor.run(request['items'],request['platform'],availability=available,artifact_files=selected_files))
+        task=asyncio.create_task(self.supervisor.run(request['items'],request['platform'],availability=available,artifact_files=selected_files,on_run_created=lambda rid:self.execution_runs.__setitem__(jid,rid)))
         self.jobs[jid]=task;self.commands[key]=(digest,jid)
         return dict(status='accepted',execution_id=jid)
     async def wait(self,execution_id):return deepcopy(await asyncio.shield(self.jobs[execution_id]))
@@ -99,7 +99,15 @@ class StartAPI:
             with closing(sqlite3.connect(self.ledger)) as c:
                 known=c.execute('SELECT 1 FROM admissions WHERE execution_id=?',(execution_id,)).fetchone()
             return dict(status='recovery_required',reason='PRIOR_ADMISSION_REQUIRES_RECONCILIATION',execution_id=execution_id) if known else dict(status='not_found')
-        if not task.done():return dict(status='in_progress',execution_id=execution_id)
+        if not task.done():return dict(status='in_progress',execution_id=execution_id,run_id=self.execution_runs.get(execution_id))
         if task.cancelled() or task.exception() is not None:return dict(status='error',execution_id=execution_id,reason='EXECUTION_OR_STORAGE_ERROR')
         result=task.result()
         return dict(status='finished',execution_id=execution_id,run_id=result['run_id'],execution_status=result['execution_status'])
+
+    def cancel(self,execution_id):
+        task=self.jobs.get(execution_id)
+        if task is None:return dict(status='not_found')
+        if task.done():return dict(status='already_terminal')
+        if task.cancelling():return dict(status='cancel_already_requested')
+        task.cancel()
+        return dict(status='cancel_requested')

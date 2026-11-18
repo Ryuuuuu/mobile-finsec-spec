@@ -29,7 +29,7 @@ class StructureSupervisor:
         self.survivors=set()
 
     async def run(self, items, platform=None, timeout=0.2, progress_timeout=0.1,
-                  recording_id=None, recordings=None, artifact_files=None, mock_outcomes=None, availability=None):
+                  recording_id=None, recordings=None, artifact_files=None, mock_outcomes=None, availability=None, on_run_created=None):
         if (not isinstance(items,list) or not 1<=len(items)<=10
                 or not all(isinstance(x,str) for x in items) or len(set(items))!=len(items)
                 or platform not in (None,'aos','ios')):raise ValueError('INVALID_PLAN')
@@ -50,6 +50,7 @@ class StructureSupervisor:
         run_id='synthetic-'+uuid4().hex
         output=self.root/run_id;output.mkdir()
         journal=RunJournal(output,run_id)
+        if on_run_created is not None:on_run_created(run_id)
         rows=[dict(item_id=i,execution_status='not_run',reason='NOT_REACHED',recording_context=deepcopy(recording)) for i in items]
         events=[];token=None;active=None;current=None;safe=True;grant=None
         result=dict(contract='structure-run.v1',run_id=run_id,synthetic=True,

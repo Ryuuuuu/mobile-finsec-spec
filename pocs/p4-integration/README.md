@@ -165,3 +165,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [Start/preflight API](docs/START-PREFLIGHT.md) validates mock device/item selection and prerequisites independently of models, with disabled reasons, command deduplication and disconnect checks.
 
 [Integrated structural acceptance](docs/INTEGRATED-STRUCTURE.md) connects start selection through source-format synthetic recording, live logs, scoped packet bytes, sealed results and multi-run history; includes failure/restart boundaries.
+
+[GPUI contract alignment via mock UI](docs/UI-CONTRACT-BRIDGE.md) tests record/check/result projections, live cursor behavior, finalized history, disconnected/partial/cancel states. No GPUI implementation is claimed.
