@@ -6,7 +6,7 @@ After user-approved Microsoft Build Tools 2022 17.14.45 / MSVC and Windows SDK i
 
 The isolated [native smoke](../gpui-smoke/src/main.rs) pins gpui-kit 0.10.0 and includes the resolved Cargo.lock. `cargo build --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml` succeeded in 3m30s on this machine. Launch the resulting `target/debug/finsec-gpui-smoke.exe`: its Korean/English label and Verify button are exposed through Windows accessibility; an actual click changed the counter from 2 to 3. This verifies native window/input state, not the proposed three-tab application or Python API integration. A screenshot while another window covered it was not treated as rendering evidence. Source startup follows the official Apache-2.0 [example](https://gpui-kit.com/docs/getting-started/). Dependency distribution/license review remains a product task.
 
-The [mock loopback API](LOOPBACK-API.md) and earlier [narrow native pipe probe](NATIVE-RUST-PIPE.md) remain distinct results. The smoke has no Python transport, device/model, inspection skill or verdict logic. Full GPUI record/check/results integration remains unimplemented. The following observations are historical, before installation.
+The [mock loopback API](LOOPBACK-API.md) and earlier [narrow native pipe probe](NATIVE-RUST-PIPE.md) remain distinct results. The initial smoke had no Python transport; the read-only private-pipe follow-up below now verifies one native UI request. It still has no device/model, inspection skill or verdict logic. Full GPUI record/check/results integration remains unimplemented. The following observations are historical, before installation.
 
 ## Original observed boundary
 
@@ -57,3 +57,19 @@ Carry `mock-ui.v1`, project ID, request generation, execution/run ID and event c
 5. Record compile/run/window/transport tests independently. Native virtualized lists, full selectors, IME, accessibility, project-global ownership, production service lifecycle and real device/model integrations remain separate gates.
 
 This plan closes the preparation/documentation step only. It does not establish that the approved product screens can already compile or communicate with Python on this PC.
+
+## Native GPUI to Python read-only follow-up
+
+The native button now starts the existing `integration.mock_stdio` Python child with private stdin/stdout pipes on a background executor, sends only `history`, closes stdin, waits for child exit and renders the validated run count. No task is admitted. Set `FINSEC_MOCK_PYTHON` to an existing Python executable and `FINSEC_MOCK_ROOT` to a disposable private synthetic root. The module cwd is derived from this POC Cargo manifest. No shell, network listener, token, device or model is involved. The mock server only creates its existing opaque fixture files.
+
+Executed: two Rust parser tests passed (ready/response identity, stale generation, malformed/extra/oversized frames). The opt-in real-child Rust test passed against the existing Python venv, with normal child exit. The rebuilt native GPUI window was clicked through computer use and displayed `Python mock history verified: 0 runs; child exited`; screenshot and accessibility state agreed. This is actual GPUI -> Rust std pipes -> Python UIWire -> GPUI display, with an empty synthetic history. It is not native HTTP integration, nonempty result rendering or the full approved three-tab workflow.
+
+```powershell
+$env:FINSEC_MOCK_PYTHON = 'C:\QA\venv\Scripts\python.exe'
+$env:FINSEC_MOCK_ROOT = 'C:\QA\private-synthetic-root'
+cargo test --locked --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml
+cargo test --locked --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml -- --ignored
+cargo run --locked --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml
+```
+
+The reader caps output at 256 KiB plus an overflow byte; the child wait has a five-second deadline and kills/reaps the owned child on failure. Errors expose fixed categories, not raw child stderr/data. Busy suppresses overlapping button requests. The actual GUI proof covers normal completion only. Native timeout/forced-exit races, window close during request, descendant processes, hostile-child pipe inheritance, cancellation of admitted jobs and persistent multi-request sessions are **not validated** by this one-shot trusted mock probe. Production launcher lifecycle remains a separate task; do not promote this small probe as the finished adapter.
