@@ -35,3 +35,7 @@ Actual P1 recording IDs and P2 collection/session IDs still need a verified mapp
 Reproduce from pocs/p4-integration with unittest discovery for test_recording_context.py plus the structural selection documented in STRUCTURAL-SUPERVISOR.md. All fixtures are created as mock data in code/temp directories. Source/docs/tests can be public; real records must remain private.
 
 Validation (Windows/Python 3.12.10): 54 selected structural tests passed, zero skips, including 7 new recording-contract tests. No check-content or security-verdict suite was run.
+
+## Source-format follow-up
+
+[Offline file handoff](ARTIFACT-HANDOFF.md) now reads synthetic files written by actual P1/P2 serializers and delivers actions plus packet metadata to mock executors. The earlier synthetic catalog remains supported. Actual device collection/replay and real model execution remain untested.

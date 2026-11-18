@@ -9,6 +9,7 @@ from uuid import uuid4
 from .lease import LeaseStore, LeaseError
 from .skill_structure import load_skills, provider_context
 from .recording_context import resolve_recording
+from .artifact_reader import read_artifacts
 
 
 class MockExecutor:
@@ -27,14 +28,20 @@ class StructureSupervisor:
         self.survivors=set()
 
     async def run(self, items, platform=None, timeout=0.2, progress_timeout=0.1,
-                  recording_id=None, recordings=None):
+                  recording_id=None, recordings=None, artifact_files=None):
         if (not isinstance(items,list) or not 1<=len(items)<=10
                 or not all(isinstance(x,str) for x in items) or len(set(items))!=len(items)
                 or platform not in (None,'aos','ios')):raise ValueError('INVALID_PLAN')
         for value in (timeout,progress_timeout):
             if type(value) not in (int,float) or not math.isfinite(value) or not 0.01<=value<=60:
                 raise ValueError('INVALID_TIMEOUT')
-        recording=resolve_recording(recording_id,{} if recordings is None else recordings)
+        artifact_data=None
+        if artifact_files is not None:
+            if recording_id is not None or recordings is not None or not isinstance(artifact_files,dict) or set(artifact_files)!={'link','route','packets'}:
+                raise ValueError('INVALID_ARTIFACT_SELECTION')
+            recording,artifact_data=read_artifacts(artifact_files['link'],artifact_files['route'],artifact_files['packets'])
+        else:
+            recording=resolve_recording(recording_id,{} if recordings is None else recordings)
         run_id='synthetic-'+uuid4().hex
         output=self.root/run_id;output.mkdir()
         rows=[dict(item_id=i,execution_status='not_run',reason='NOT_REACHED',recording_context=deepcopy(recording)) for i in items]
@@ -67,6 +74,7 @@ class StructureSupervisor:
                     last_progress=time.monotonic()
                 context=provider_context(snapshots[index]);context['item_id']=item
                 context['recording_context']=deepcopy(recording)
+                if artifact_data is not None:context['artifact_data']=deepcopy(artifact_data)
                 active=asyncio.create_task(self.executor.run(deepcopy(context),progress))
                 failure=None
                 while not active.done():

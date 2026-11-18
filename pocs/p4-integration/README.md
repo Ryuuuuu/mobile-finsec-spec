@@ -155,3 +155,5 @@ A separate [Ollama loopback HTTP preparation adapter](docs/OLLAMA-LOCAL-PREPARAT
 Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-only orchestration path. The historical Supervisor alias and demo CLI remain legacy P3-backed compatibility paths, outside current acceptance.
 
 [Recording context handoff](docs/RECORDING-CONTEXT.md) covers synthetic P1/P2 references, unselected-recording app-launch intent, explicit missing/partial states and sequential mock-agent delivery.
+
+[Offline P1/P2 file handoff](docs/ARTIFACT-HANDOFF.md) tests current route JSON/link and SQLite formats with synthetic files; it is not real-device or model validation.

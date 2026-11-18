@@ -162,3 +162,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Recording-reference structural handoff
 
 [Common-ID recording contract](../pocs/p4-integration/docs/RECORDING-CONTEXT.md) passes synthetic P1 route/P2 packet references to selected sequential mock agents and persists independent collection/execution states. 54 structural tests passed. Real artifact mapping/replay/capture/model execution is not implemented or validated by this change.
+
+### P1/P2 source-format structural handoff
+
+[Offline artifact reader](../pocs/p4-integration/docs/ARTIFACT-HANDOFF.md) reads synthetic files produced by the P1 JSON writer and P2 SQLite Store. 61 structural tests passed; missing/corrupt/partial/version/unsealed states and detached sequential handoff are checked. Raw packet BLOBs, real-device replay/capture and actual model execution remain outside this test.
