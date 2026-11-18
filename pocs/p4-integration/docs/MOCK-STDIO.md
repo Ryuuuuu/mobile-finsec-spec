@@ -4,7 +4,7 @@
 
 MSVC installation/license approval remains deferred. Rust metadata compilation does not produce an executable, and no usable WSL/Docker environment was found. Rather than claim Rust-Python IPC, this POC tests a real Python child process through inherited standard input/output pipes. No native GPUI, Rust client, model, device or assessment skill is executed.
 
-`python -m integration.mock_stdio --mock-root <disposable-private-directory>` creates one synthetic device, one opaque mock item and a StructureSupervisor/StartAPI/UIBridge/UIWire instance. Use a dedicated disposable directory, never a user's skill/project directory. It has no recording registry: an unselected recording carries the existing default app-launch **intent only**, not an actual launch. P1/P2 artifact-to-agent behavior remains separately tested in-process.
+`python -m integration.mock_stdio --mock-root <disposable-private-directory>` creates one synthetic device, one opaque mock item and a StructureSupervisor/StartAPI/UIBridge/UIWire instance. Use a dedicated disposable directory, never a user's skill/project directory. An unselected recording carries the existing default app-launch **intent only**, not an actual launch. The later recording-registry extension below adds explicit synthetic artifact selection across the child-process boundary.
 
 ## Protocol and lifecycle
 
@@ -51,3 +51,17 @@ Every close attempt disables new exchanges immediately. If cleanup fails, the cl
 Four tests use actual local Python children: normal EOF/exit code 0 and repeated close; EOF-ignoring child terminated after deadline; an injected kill OSError while a real child remains alive followed by successful retry; and invalid startup handshake plus injected kill failure, with retained handle and later successful cleanup. The kill error is a controlled fault injection, not a reproduced Windows permission failure. All owned test children were subsequently terminated. No actual external tool, process tree, device, security setting or inspection skill was involved.
 
 Cleanup follow-up regression: 105 structural tests passed, zero skips.
+
+## Synthetic P1/P2 selection across the child boundary
+
+The worker now discovers up to 20 startup-only entries under `<mock-root>/recordings/<ref>/`, with fixed filenames `combined-link.json`, `route.json`, and `packets.sqlite`. References are 1–80 ASCII letters/digits/underscores/hyphens. It rejects invalid directories, symlinks and resolved paths escaping the configured root. Requests carry only the existing recording_ref, never caller-supplied filesystem paths. This is a trusted disposable-root registry, not OS-level isolation against an adversary concurrently replacing files. No dynamic import, network fetch or real device integration is added.
+
+Missing files in a registered directory remain explicit missing states; unknown references do not start work. Partial packet collection remains partial even when the mock task completes. Existing readers validate P1/P2 identities/versions, seal status, limits and content hashes; packet reads retain per-item revocable grants. A task's completed execution status is not a complete-capture or security judgement.
+
+Actual subprocess tests use the existing P1 serializer and P2 SQLite Store to prepare synthetic files, then select two distinct local records through pipe requests. A test-only child executor hashes the delivered actions and requested packet bytes and writes private receipts. Tests compare those hashes with each selected fixture and verify a foreign recording ID is denied. Raw payloads and action text are absent from final result responses. Receipts are temporary test data, not public artifacts or a production reporting channel.
+
+Additional scenarios cover partial collection, registered-but-missing route/database, unknown reference, traversal-like reference rejection, result/history retrieval, registry count limit and invalid reference names. The count/name tests are in-process; the selection/missing/partial/isolation/result tests use actual Python children. Symlink/race attacks are not newly exercised here. The two fixture directories intentionally reuse source IDs while differing in actions and packet content, checking that selection binds the correct file set rather than assuming IDs alone identify a file.
+
+This is Python-to-Python IPC over a shared local filesystem, not streaming APK/device data through pipes, actual P1 recording/P2 collection, Rust-Python integration, GPUI rendering, inspection skill execution or a real model test.
+
+Recording handoff follow-up: 108 structural tests passed, zero skips.

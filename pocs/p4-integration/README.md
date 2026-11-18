@@ -14,7 +14,7 @@ This explicit suite list excludes historical P3-backed tests and the legacy demo
 
 The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen, authenticated network IPC or real model/device integration is established by these tests.
 
-Validation on Windows/Python 3.12.10: the explicit runner executed 105 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
+Validation on Windows/Python 3.12.10: the explicit runner executed 108 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
 
 ## Current design and validation links
 
@@ -45,4 +45,4 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 
 The previous P2/P3-coupled architecture, full-suite command and CLI examples are retained only in [the archived README](docs/LEGACY-P4-README.md). They predate the structure-only user instruction and must not be used as current acceptance.
 
-[Actual mock child-process IPC](docs/MOCK-STDIO.md) tests Python-to-Python private pipes, EOF, forced termination and restart admission persistence. Rust-Python IPC remains unverified.
+[Actual mock child-process IPC](docs/MOCK-STDIO.md) tests Python-to-Python private pipes, EOF, forced termination, restart admission persistence and selected synthetic P1/P2 artifact handoff. Rust-Python IPC remains unverified.

@@ -3,11 +3,35 @@ import argparse
 import asyncio
 import json
 from pathlib import Path
+import re
 import sys
 from .start_api import StartAPI
 from .structure_supervisor import StructureSupervisor
 from .ui_bridge import UIBridge
 from .ui_wire import UIWire, LIMIT
+
+
+def recording_registry(root):
+    """Startup-only references in a trusted disposable root; no wire paths."""
+    base = root / 'recordings'
+    if not base.exists(): return {}
+    if base.is_symlink() or not base.is_dir() or base.resolve().parent != root.resolve():
+        raise ValueError('INVALID_RECORDING_ROOT')
+    entries = list(base.iterdir())
+    if len(entries) > 20: raise ValueError('RECORDING_REGISTRY_LIMIT')
+    result = {}
+    for folder in entries:
+        if not re.fullmatch(r'[A-Za-z0-9_-]{1,80}', folder.name):
+            raise ValueError('INVALID_RECORDING_REF')
+        if folder.is_symlink() or not folder.is_dir() or folder.resolve().parent != base.resolve():
+            raise ValueError('INVALID_RECORDING_DIRECTORY')
+        files = {key: folder / name for key, name in (
+            ('link', 'combined-link.json'), ('route', 'route.json'), ('packets', 'packets.sqlite'))}
+        for path in files.values():
+            if path.is_symlink() or path.resolve().parent != folder.resolve():
+                raise ValueError('INVALID_RECORDING_FILE')
+        result[folder.name] = files  # Missing files remain visible as missing, not default launch.
+    return result
 
 
 async def serve(root):
@@ -26,7 +50,8 @@ async def serve(root):
         'capabilities': {'mock_input': True}}}}
     catalog = {'mock-item': {'platforms': ['aos'], 'common_skill': True,
         'platform_skills': ['aos'], 'requires': ['mock_input']}}
-    api = StartAPI(StructureSupervisor(root / 'runs', skills), inventory, catalog)
+    api = StartAPI(StructureSupervisor(root / 'runs', skills), inventory, catalog,
+                   recording_registry(root))
     wire = UIWire(UIBridge('synthetic-stdio', api))
     def write(payload):
         sys.stdout.buffer.write(payload + b'\n')
