@@ -37,3 +37,5 @@
 - [P4](pocs/p4-integration/README.md): fake provider와 로컬 P2/P3 실행·이력·취소/복구 경계. 실모델과 GPUI 제품 통합은 미구현/미검증입니다.
 
 초기 문서의 시점별 검증 기록은 보존합니다. POC 성공은 제품 전체 기능 또는 공식 평가 통과를 뜻하지 않습니다.
+
+- [S1 / CHK-15 첫 정적 POC](pocs/s1-apk-obfuscation/README.md): 실제 APK 구조 관찰은 판단 불가능으로 유지하고, 합성 2차원 증거 판정 계약만 시험합니다. 실제 난독화 분석기·보안 판정은 아닙니다.
