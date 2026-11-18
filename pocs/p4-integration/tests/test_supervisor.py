@@ -77,7 +77,7 @@ class SupervisorTests(unittest.IsolatedAsyncioTestCase):
         lifecycle = [(e["type"], e["item_id"]) for e in h.events if e["type"] in {"item_running", "item_cleaning", "item_terminal"}]
         self.assertEqual(lifecycle, [(kind, item.item_id) for item in plan.items for kind in ("item_running", "item_cleaning", "item_terminal")])
         self.assertEqual(self.supervisor.lease.inspect()["lifecycle"], "free")
-        snapshot = json.loads((h.output / "run.json").read_text())
+        snapshot = json.loads((h.output / "run.json").read_text(encoding="utf-8"))
         self.assertEqual(snapshot["route"]["reason"], "P1_NOT_INTEGRATED")
         self.assertEqual(snapshot["contract_snapshot"], h.contract)
 
@@ -153,7 +153,7 @@ class SupervisorTests(unittest.IsolatedAsyncioTestCase):
         self.assertIsNone(h.p2)
         self.assertEqual(self.supervisor.lease.inspect()["generation"], 0)
         self.assertEqual([r["run_id"] for r in self.supervisor.history.list()], [h.run_id])
-        self.assertIsNone(json.loads((h.output / "run.json").read_text())["contract_snapshot"])
+        self.assertIsNone(json.loads((h.output / "run.json").read_text(encoding="utf-8"))["contract_snapshot"])
 
     async def test_invalid_target_platform_selection_and_version_create_no_run(self):
         invalid = [Plan("device", device_id="actual-device"), Plan("ios", platform="ios"),
@@ -223,7 +223,7 @@ class SupervisorTests(unittest.IsolatedAsyncioTestCase):
         self.assert_blocked_rows(h, "ITEM_TIMEOUT", "timed_out")
 
     async def test_tool_deadline_stops_current_and_all_followups(self):
-        h = await self.run_plan(Plan("tool-deadline", items=(Item("current", tool_fault="timeout"), Item("later")), tool_timeout=0.06, cancel_grace=0.02))
+        h = await self.run_plan(Plan("tool-deadline", items=(Item("current", tool_fault="timeout"), Item("later")), tool_timeout=0.5, cancel_grace=0.02))
         self.assert_blocked_rows(h, "TOOL_TIMEOUT", "timed_out")
         self.assertTrue(all(f.done() for f in h.resources))
         self.assertEqual(self.supervisor.lease.inspect()["lifecycle"], "free")

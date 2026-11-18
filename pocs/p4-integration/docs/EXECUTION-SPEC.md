@@ -138,3 +138,20 @@ finalizing_failed로 메모리에 남고 history에는 없다. 디스크 오류 
 
 full production RUN/AI 계약, process kill/OS 격리, durable command cache, 자동 recovery,
 UI 재연결 및 실제 provider 교체의 모든 수용기준을 충족했다고 주장하지 않는다.
+
+
+## Windows device-free portability correction
+
+Final run snapshots and sealed results are UTF-8 regardless of host locale. Every
+short-lived history SQLite connection must commit/rollback and then close on both
+success and error; sqlite3's transaction context alone does not close a connection.
+This preserves existing finalization and integrity checks while preventing Windows
+cp949 decode failures and locked history files. No provider, lease, evidence, or
+security verdict contract changes. Device-free Windows execution extends the
+original Linux-only verification scope; real models/devices remain unaccepted.
+
+The injected tool-timeout unit fixture allows 0.5 seconds rather than 0.06 seconds
+so ordinary P2 startup does not consume its deadline before the selected item runs.
+The deliberately stalled tool still exceeds that deadline; production defaults are
+unchanged. Outside-run path rejection and privilege-dependent real symlink rejection
+are separate tests so unavailable Windows symlink privilege does not mask path checks.

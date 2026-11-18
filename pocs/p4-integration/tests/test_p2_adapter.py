@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import copy
 from pathlib import Path
+from contextlib import closing
 import sqlite3
 import sys
 import tempfile
@@ -99,7 +100,7 @@ class P2AdapterTests(unittest.IsolatedAsyncioTestCase):
     async def test_reference_rejects_actual_db_payload_corruption(self):
         report = await self.adapter.capture()
         await self.adapter.cleanup()
-        with sqlite3.connect(self.adapter.db) as connection:
+        with closing(sqlite3.connect(self.adapter.db)) as connection, connection:
             connection.execute("UPDATE packets SET request=?", (b"corrupted",))
         with self.assertRaisesRegex(RuntimeError, "REFERENCE_INVALID"):
             validate_reference(report)

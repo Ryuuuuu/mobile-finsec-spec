@@ -1,4 +1,5 @@
 """Final-only history; live events are a separate run-scoped stream."""
+from contextlib import closing
 import json
 import os
 from pathlib import Path
@@ -30,7 +31,7 @@ def validate_final(result, *, root=None, snapshot=None):
         record_path = Path(root) / 'run.json'
         if record_path.is_symlink():
             raise ContractError('RUN_SNAPSHOT_SYMLINK')
-        record = json.loads(record_path.read_text())
+        record = json.loads(record_path.read_text(encoding="utf-8"))
         if (record['run_id'] != result['run_id'] or record['session_id'] != result['session_id']
                 or digest(record['plan']) != record['config_hash']
                 or result['selected_item_ids'] != [item['item_id'] for item in record['plan']['items']]
@@ -101,32 +102,32 @@ def validate_final(result, *, root=None, snapshot=None):
 class History:
     def __init__(self, path):
         self.path = Path(path)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             db.execute('CREATE TABLE IF NOT EXISTS history (run_id TEXT PRIMARY KEY, path TEXT NOT NULL, digest TEXT NOT NULL)')
 
     def finalize(self, result, output, snapshot):
         validate_final(result, root=output, snapshot=snapshot)
         path = Path(output) / 'final.json'
         if path.exists():
-            if json.loads(path.read_text()) != result:
+            if json.loads(path.read_text(encoding="utf-8")) != result:
                 raise ContractError('IMMUTABLE_FINAL_CONFLICT')
         else:
             atomic_json(path, result)
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             existing = db.execute('SELECT digest FROM history WHERE run_id=?', (result['run_id'],)).fetchone()
             if existing and existing[0] != digest(result):
                 raise ContractError('IMMUTABLE_HISTORY_CONFLICT')
             db.execute('INSERT OR IGNORE INTO history VALUES (?, ?, ?)', (result['run_id'], str(path), digest(result)))
 
     def list(self):
-        with sqlite3.connect(self.path) as db:
+        with closing(sqlite3.connect(self.path)) as db, db:
             records = db.execute('SELECT run_id,path,digest FROM history ORDER BY rowid DESC').fetchall()
         values = []
         for run_id, path, expected in records:
-            result = json.loads(Path(path).read_text())
+            result = json.loads(Path(path).read_text(encoding="utf-8"))
             if result['run_id'] != run_id or digest(result) != expected:
                 raise ContractError('FINAL_INTEGRITY_ERROR')
-            record = json.loads((Path(path).parent / 'run.json').read_text())
+            record = json.loads((Path(path).parent / 'run.json').read_text(encoding="utf-8"))
             validate_final(result, root=Path(path).parent, snapshot=record['contract_snapshot'])
             values.append(result)
         return values

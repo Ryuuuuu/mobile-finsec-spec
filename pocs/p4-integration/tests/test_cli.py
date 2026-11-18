@@ -34,7 +34,7 @@ class CLITests(unittest.TestCase):
         return report
 
     def final(self, report):
-        return json.loads((Path(report["output"]) / "final.json").read_text())
+        return json.loads((Path(report["output"]) / "final.json").read_text(encoding="utf-8"))
 
     def test_normal_three_verdicts_final_only_history_and_validation(self):
         report = self.demo()
@@ -118,9 +118,9 @@ class CLITests(unittest.TestCase):
         self.assertFalse(self.output.exists())
         report = self.demo("proxy-off")
         path = Path(report["output"]) / "final.json"
-        result = json.loads(path.read_text())
+        result = json.loads(path.read_text(encoding="utf-8"))
         result["items"][0]["verdict"] = "fail"
-        path.write_text(json.dumps(result))
+        path.write_text(json.dumps(result), encoding="utf-8")
         failed = self.command("validate", "--run", report["output"], expected=2)
         self.assertEqual(failed["state"], "command_error")
 

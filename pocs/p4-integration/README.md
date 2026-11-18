@@ -126,3 +126,20 @@ thread가 끝났다고 간주하지 않는다. thread나 cleanup task가 남으�
 P2의 후속 TLS/WS 확장 이후에도 이 adapter는 기본 HTTP 경로를 사용합니다. P4 requirements는
 P2의 고정 WS codec 의존성도 연결하지만, P4 자체의 HTTPS/WSS 시나리오를 검증했다는 뜻은
 아닙니다. 확장 검증은 [P2 보고서](../p2-proxy-relay/docs/VALIDATION.md)를 참조합니다.
+
+
+## Windows device-free execution follow-up
+
+The original Linux/cloud scope above is now additionally checked on Windows 11,
+Python 3.12.10. This does not integrate P1 or real Android collection into P4.
+See [Windows validation](docs/WINDOWS-VALIDATION.md) for the exact tested scope.
+Use a dedicated venv and the same requirements, then from this directory:
+
+```powershell
+.venv\Scripts\python.exe -m unittest discover -s tests -v
+.venv\Scripts\python.exe -m integration demo --scenario normal --output NEW_PRIVATE_DIR
+.venv\Scripts\python.exe -m integration history --output NEW_PRIVATE_DIR
+.venv\Scripts\python.exe -m integration validate --run RUN_PATH_FROM_DEMO_JSON
+```
+
+Providers remain fake-a/fake-b; no model API key, ADB, or device security change is required.

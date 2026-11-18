@@ -223,14 +223,26 @@ class FinalHistoryContractTests(unittest.IsolatedAsyncioTestCase):
                 with self.assertRaises(ContractError):
                     self.validate(handle, modified)
 
-    async def test_valid_p3_bundle_outside_run_and_symlink_escape_are_rejected(self):
+    async def test_valid_p3_bundle_outside_run_is_rejected(self):
+        await self.check_external_bundle(False)
+
+    async def test_symlink_escape_is_rejected(self):
+        await self.check_external_bundle(True)
+
+    async def check_external_bundle(self, use_symlink):
         handle, result = await self.completed()
         original = Path(result["items"][0]["p3"]["bundle"])
         outside = self.root / "outside-p3"
         shutil.copytree(original, outside)
         link = handle.output / "synthetic-external-bundle"
-        link.symlink_to(outside, target_is_directory=True)
-        for path in (outside, link):
+        if use_symlink:
+            try:
+                link.symlink_to(outside, target_is_directory=True)
+            except OSError as exc:
+                if getattr(exc, "winerror", None) == 1314:
+                    self.skipTest("Windows symlink privilege unavailable")
+                raise
+        for path in (link if use_symlink else outside,):
             with self.subTest(path=path.name):
                 modified = deepcopy(result)
                 row = modified["items"][0]
@@ -269,6 +281,34 @@ class FinalHistoryContractTests(unittest.IsolatedAsyncioTestCase):
         (handle.output / "final.json").write_text(json.dumps(modified), encoding="utf-8")
         with self.assertRaisesRegex(ContractError, "FINAL_INTEGRITY_ERROR"):
             self.supervisor.history.list()
+
+
+class ConnectionLifetimeTests(unittest.TestCase):
+    def test_history_closes_connections_on_success_and_failure(self):
+        import sqlite3
+        from unittest.mock import patch
+        from integration.history import History
+        opened = []
+        original = sqlite3.connect
+
+        def connect(*args, **kwargs):
+            db = original(*args, **kwargs)
+            opened.append(db)
+            return db
+
+        with tempfile.TemporaryDirectory() as folder, patch(
+            'integration.history.sqlite3.connect', side_effect=connect
+        ):
+            history = History(Path(folder) / 'history.sqlite')
+            self.assertEqual(history.list(), [])
+            with original(history.path) as db:
+                db.execute('DROP TABLE history')
+            db.close()
+            with self.assertRaises(sqlite3.OperationalError):
+                history.list()
+            for connection in opened:
+                with self.assertRaises(sqlite3.ProgrammingError):
+                    connection.execute('SELECT 1')
 
 
 if __name__ == "__main__":
