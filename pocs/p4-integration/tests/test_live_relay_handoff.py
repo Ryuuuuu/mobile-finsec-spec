@@ -405,6 +405,44 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.handoff())['packet_status'],'complete')
         self.assertEqual(self.stop_calls,1)
 
+    async def large_split_http_handoff(self,capture_limit):
+        self.relay.config.capture_body_bytes=capture_limit
+        body=b'QA HANDOFF'+bytes(range(256))*320
+        raw=p2_fixture.request_bytes('/split-large',body)
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        reader,writer=await asyncio.open_connection('127.0.0.1',self.relay.port)
+        try:
+            for offset in range(0,len(raw),8192):
+                writer.write(raw[offset:offset+8192]);await writer.drain();await asyncio.sleep(0)
+            response=await asyncio.wait_for(reader.read(),3)
+            self.assertTrue(response.endswith(body))
+        finally:writer.close();await writer.wait_closed()
+        await asyncio.to_thread(self.combined.finish);await self.relay.close()
+        self.assertEqual(self.up.received,[('/split-large',body)])
+        self.files=dict(link=self.engine.j.path/'combined-link.json',route=self.engine.j.path/'route.json',packets=self.db)
+        summary,data=self.read_files(self.files)
+        grant=PacketGrant(self.db,summary['recording_id'],data['network_recording_id'],
+                          summary['source_hashes']['packets'],lambda:None)
+        captured=data['packets'][0]
+        result=grant.read(summary['recording_id'],captured['packet_id'],'request')
+        self.assertEqual(result['status'],'partial');self.assertFalse(result['complete'])
+        self.assertEqual(result['original_size'],len(raw))
+        self.assertEqual(result['stored_size'],min(capture_limit,len(raw)))
+        self.assertEqual(result['delivered_size'],65536)
+        self.assertEqual(base64.b64decode(result['data']),raw[:65536])
+        self.assertEqual(result['capture_truncated'],capture_limit<len(raw))
+        self.assertEqual(result['delivery_truncated'],capture_limit>65536)
+        expected='partial' if capture_limit<len(raw) else 'complete'
+        self.assertEqual(summary['packet_status'],expected)
+        self.assertEqual((await self.handoff())['packet_status'],expected)
+
+    async def test_large_split_http_capture_truncation_stays_visible(self):
+        await self.large_split_http_handoff(65536)
+
+    async def test_large_split_http_delivery_limit_does_not_relabel_capture(self):
+        await self.large_split_http_handoff(131072)
+
     async def test_capture_write_loss_preserves_later_packet_and_partial_handoff(self):
         await asyncio.to_thread(self.combined.start)
         await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())

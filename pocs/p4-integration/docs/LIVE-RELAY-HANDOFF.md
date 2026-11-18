@@ -164,3 +164,31 @@ physical disk fault or a throughput/overload benchmark. No device, model or
 inspection implementation is exercised.
 
 Capture-loss follow-up validation: full structure-only suite 148/148 PASS, zero skips (35.433s), existing P2 venv.
+
+## Split HTTP capture limit versus delivery limit
+
+Two real-code handoff tests send a synthetic binary body of 81,930 bytes plus HTTP
+headers in 8,192-byte application writes through the relay. Upstream receives the
+whole body and the echoed response matches. This exercises incremental writes,
+not a guarantee about TCP packet segmentation or a maximum-throughput benchmark.
+
+With P2 capture limited to 65,536 bytes, P4 preserves partial capture and returns
+exactly the retained prefix with capture_truncated=true, delivery_truncated=false,
+and distinct original/stored/delivered sizes. With capture raised to 131,072 for
+this isolated test, all wire bytes are stored and capture remains complete, but
+PacketGrant's existing 65,536-byte per-read bound returns partial delivery with
+capture_truncated=false and delivery_truncated=true. The structural handoff retains
+that distinction rather than relabeling all stored capture as incomplete merely
+because one caller received a prefix. No missing suffix is silently synthesized.
+
+Both new tests passed (0.655s), with actual P1/P2/P4 code, fake device and opaque
+mock executor; no new production defect was reproduced. Existing WebSocket tests
+already separately cover fragmentation/interleaved control frames, frame/message
+bounds and exact forwarded bytes versus truncated capture. The prior WSS-to-P4
+STOP test covers partial-message collection. This follow-up does not newly claim
+full WebSocket message reassembly, offset/paged packet reads, arbitrarily large
+capture, GUI/device compatibility or performance certification. P4 still has its
+existing database/packet/count budgets and no continuation offset API. Those
+product-scale decisions remain open; no new limit policy is introduced here.
+
+Large-data follow-up validation: full structure-only suite 150/150 PASS, zero skips (28.929s), existing P2 venv.
