@@ -2,6 +2,8 @@
 import argparse
 import io
 import math
+import re
+import xml.etree.ElementTree as ET
 import pathlib
 import time
 import tkinter as tk
@@ -16,10 +18,39 @@ def mapping(frame,geometry,now,generation):
     if frame['generation']!=generation:raise ValueError('Video rotated/restarted; input blocked')
     if frame['size']!=(geometry['width'],geometry['height']):raise ValueError('Video/device dimensions differ; input blocked')
 
-def verify_pixels(displayed,png):
+def content_region(xml,package,locator,size,status_bar=None):
+    """Only an identified app target inside a unique Android content root may omit system bars."""
+    def bounds(node):
+        match=re.fullmatch(r'\[(\d+),(\d+)\]\[(\d+),(\d+)\]',node.get('bounds',''))
+        if not match:return None
+        l,t,r,b=map(int,match.groups())
+        return (l,t,r,b) if 0<=l<r<=size[0] and 0<=t<b<=size[1] else None
+    if not locator:return None
+    try:root=ET.fromstring(xml)
+    except ET.ParseError:return None
+    contents=[n for n in root.iter() if n.get('package')==package and n.get('resource-id')=='android:id/content']
+    if len(contents)!=1:return None
+    area=bounds(contents[0])
+    targets=[n for n in contents[0].iter() if n.get('package')==package and n.get('resource-id')==locator and n.get('clickable')=='true' and n.get('enabled')!='false']
+    if area is None or len(targets)!=1:return None
+    if status_bar is not None:
+        bar=status_bar
+        if (not isinstance(bar,dict) or bar.get('visible') is not True or
+            any(type(bar.get(k)) is not int for k in ('x','y','width','height')) or
+            bar['x']!=0 or bar['y']!=0 or bar['width']!=size[0] or not 0<bar['height']<size[1]//4):return None
+        area=(area[0],max(area[1],bar['height']),area[2],area[3])
+    target=bounds(targets[0])
+    if target is None or not (area[0]<=target[0]<target[2]<=area[2] and area[1]<=target[1]<target[3]<=area[3]):return None
+    return area
+
+def verify_pixels(displayed,png,region=None):
     current=Image.open(io.BytesIO(png)).convert('RGB')
     if current.size!=displayed.size:raise ValueError('Current screenshot dimensions differ')
     # Local block error, not a global average that would hide a changed button.
+    if region is not None:
+        l,t,r,b=region
+        if not (0<=l<r<=current.width and 0<=t<b<=current.height):raise ValueError('Invalid comparison region')
+        displayed=displayed.crop(region);current=current.crop(region)
     difference=ImageChops.difference(displayed.convert('RGB'),current)
     blocks=difference.resize((math.ceil(current.width/16),math.ceil(current.height/16)),Image.Resampling.BOX)
     score=max(high for low,high in blocks.getextrema())
@@ -48,8 +79,8 @@ class MirrorWindow(Window):
     def poll(self):
         if self.connected and not self.busy and not self.closing:
             def read():
-                self.adapter.foreground();g=self.adapter.geometry();xml=self.adapter.source();self.adapter.foreground()
-                return {'geometry':g,'xml':xml,'at':time.monotonic()}
+                self.adapter.foreground();g=self.adapter.geometry();xml=self.adapter.source();bars=self.adapter.call('GET','/appium/device/system_bars');self.adapter.foreground()
+                return {'geometry':g,'xml':xml,'status_bar':bars.get('statusBar'),'at':time.monotonic()}
             if self.submit(read,self.render):self.observing=True
         if not self.closing:self.root.after(700,self.poll)
     def render(self,metadata):
@@ -94,18 +125,21 @@ class MirrorWindow(Window):
         frame=self.gesture_frame if action['type'] in ('tap','swipe') else self.video_frame
         if frame is None:self.status.set('No input frame');return
         geometry=dict(self.metadata['geometry']) if self.metadata else None
+        region=content_region(self.metadata['xml'],self.adapter.package,action.get('locator'),frame['size'],self.metadata.get('status_bar')) if self.metadata else None
+        status_bar=self.metadata.get('status_bar') if self.metadata else None
         action.update(timeout=5,post=self.post())
         def dispatch():
             latest,error,generation=self.video.snapshot()
             if error or geometry is None:raise ValueError('Video/metadata unavailable before dispatch')
             self.adapter.foreground()
-            score=verify_pixels(frame['image'],self.adapter.screenshot())
+            if region is not None and self.adapter.call('GET','/appium/device/system_bars').get('statusBar')!=status_bar:raise ValueError('System bar geometry changed before dispatch')
+            score=verify_pixels(frame['image'],self.adapter.screenshot(),region)
             verified_at=time.monotonic()
             _,error,generation=self.video.snapshot()
             if error:raise ValueError('Video disconnected during verification')
             mapping(dict(frame,at=verified_at),geometry,time.monotonic(),generation)
             if self.adapter.geometry()!=geometry:raise ValueError('Geometry/rotation changed before dispatch')
-            self.engine.j.write('video_input',source='scrcpy-5.0.1',generation=generation,block_error=score)
+            self.engine.j.write('video_input',source='scrcpy-5.0.1',generation=generation,block_error=score,comparison_scope='app_content' if region else 'full_display')
             self.engine.record_action(action)
         self.submit(dispatch,lambda _:self.status.set('Recorded step '+str(len(self.engine.steps))))
     def disconnect(self):

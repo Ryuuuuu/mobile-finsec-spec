@@ -1,7 +1,7 @@
 import struct,time,unittest,io,socket,threading
 from PIL import Image
 from pc.video import header,recv_exact
-from pc.mirror import mapping,verify_pixels
+from pc.mirror import mapping,verify_pixels,content_region
 
 class VideoProtocolTest(unittest.TestCase):
     def test_session_resize_and_media_flags(self):
@@ -70,3 +70,28 @@ class MirrorBoundaryTest(unittest.TestCase):
         for mode in ('recording','replaying','incomplete'):
             w=SimpleNamespace(engine=SimpleNamespace(mode=mode),status=Mock(),submit=Mock())
             Window.record(w);w.submit.assert_not_called();w.status.set.assert_called_once()
+
+class ContentRegionTest(unittest.TestCase):
+    def xml(self,package='qa.app',extra=''):
+        return f'<hierarchy><node package="{package}" resource-id="android:id/content" bounds="[0,32][128,240]"><node package="{package}" resource-id="qa.app:id/send" bounds="[16,64][112,96]" clickable="true" enabled="true"/>{extra}</node></hierarchy>'
+    def test_only_unique_target_inside_content_allows_crop(self):
+        self.assertEqual(content_region(self.xml(),'qa.app','qa.app:id/send',(128,256)),(0,32,128,240))
+        for xml,locator in ((self.xml(),None),(self.xml('other'),'qa.app:id/send'),('<bad','qa.app:id/send'),(self.xml().replace('[0,32][128,240]','[0,32][128,260]'),'qa.app:id/send'),(self.xml().replace('[16,64][112,96]','[16,0][112,16]'),'qa.app:id/send')):
+            self.assertIsNone(content_region(xml,'qa.app',locator,(128,256)))
+    def test_system_change_allowed_only_with_verified_region_body_change_still_blocks(self):
+        a=Image.new('RGB',(128,256),'white');b=a.copy();b.paste('black',(16,0,32,16))
+        def png(image):
+            out=io.BytesIO();image.save(out,format='PNG');return out.getvalue()
+        with self.assertRaises(ValueError):verify_pixels(a,png(b))
+        region=content_region(self.xml(),'qa.app','qa.app:id/send',a.size)
+        self.assertEqual(verify_pixels(a,png(b),region),0)
+        b.paste('black',(32,64,48,80))
+        with self.assertRaises(ValueError):verify_pixels(a,png(b),region)
+
+    def test_edge_to_edge_requires_valid_live_status_bar_and_target_below_it(self):
+        xml=self.xml().replace('[0,32][128,240]','[0,0][128,256]')
+        bar=dict(visible=True,x=0,y=0,width=128,height=32)
+        self.assertEqual(content_region(xml,'qa.app','qa.app:id/send',(128,256),bar),(0,32,128,256))
+        for bad in (dict(bar,height=100),dict(bar,width=120),dict(bar,visible=False),dict(bar,height=True)):
+            self.assertIsNone(content_region(xml,'qa.app','qa.app:id/send',(128,256),bad))
+        self.assertIsNone(content_region(xml.replace('[16,64][112,96]','[16,0][112,16]'),'qa.app','qa.app:id/send',(128,256),bar))

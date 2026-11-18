@@ -58,3 +58,7 @@ Review whole-device video disclosure and the device's preflight settings before 
 
 
 Final device readback retained the user-approved hidden API policies 1/1/1 and helper mock location allow. GUI closed normally with no stderr callback error. No physical USB disconnection, system rotation-setting change or real financial-app action was performed.
+
+## Status-bar guard follow-up
+
+See [actual WSS resume](COMBINED-RECORDING.md#gui-wss-resume-and-system-bar-comparison-2026-11-18). Resource-ID taps with validated content/target bounds compare the app content and may exclude a live, rechecked top system status bar. Coordinate gestures and unknown/ambiguous bounds retain full-display comparison. This avoids a measured system-icon animation false rejection without relaxing app-content pixel checks. Other layouts and devices remain unverified.

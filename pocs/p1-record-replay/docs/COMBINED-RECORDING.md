@@ -208,3 +208,15 @@ assessment or automatic recovery. No device, installation or inspection skill
 is exercised.
 
 Replay evidence follow-up validation: P1 combined 32/32 PASS (3.663s), structure-only 154/154 PASS zero skips (32.556s).
+
+## GUI WSS resume and system-bar comparison (2026-11-18)
+
+Actual PC GUI RECORD -> mirror SEND WSS click -> STOP saved one completed locator action with initial `ready` and postcondition `sent:1`. After explicitly restarting only the disposable QA activity with the same fixture arguments (no data clear), Replay JSON loaded that saved route through the file dialog; replay succeeded with the same postcondition. No route was synthesized through CLI.
+
+Both linked runs completed with supported network coverage complete: each contained one WSS handshake, four frames and two lifecycle events (7 packet rows), no gaps. Each action linked to its handshake by the explicit QA fixture token. Dispatch-to-request intervals were 163.651 ms for recording and 142.385 ms for replay on the same PC; these are observations, not performance guarantees or arbitrary-app causal attribution. TLS verification remained enabled and the existing app-local CA was used. This closes the earlier interrupted GUI WSS case for this one-step fixture; it does not establish general app/WSS compatibility or a multi-step WSS workflow.
+
+Three earlier attempts stopped before action dispatch and remain partial evidence. Private scrcpy/Appium image comparisons showed a single 16x16 block above threshold in the system status bar, while app-body blocks were below threshold. The first attempted content-only fix was insufficient because this edge-to-edge app exposes android:id/content as the full display. The final implementation also uses the live Appium statusBar rectangle, with strict geometry checks and a second pre-dispatch comparison of bar metadata.
+
+Only a unique enabled clickable resource-ID target inside a unique package-matching android:id/content root may use app-content comparison. A verified top full-width status bar may be excluded if the target remains wholly below it. Invalid/ambiguous content or bar geometry falls back to full-display comparison; coordinate input retains full-display comparison. Status bar changes during dispatch block input. App-content pixel differences, dimensions/rotation changes, black/blocked content and stale/unknown input remain subject to the existing guard. No capture restriction is bypassed. Non-top bars and other devices/layouts are not accepted by this measurement.
+
+Verification: video/geometry regression 11/11 and complete P1 suite 133/133 passed. The GUI/session and local server exited; reverse mappings and active/quarantine leases were empty; the original QA receipt was restored byte-for-byte. User-maintained hidden API policies and helper mock-location values were verified unchanged after cleanup. Actual screenshots, IDs, receipts, private PKI and packet databases remain outside public Git. The prior user Escape interruption was resumed only after an explicit resume request.
