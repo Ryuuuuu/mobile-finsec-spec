@@ -39,3 +39,5 @@
 초기 문서의 시점별 검증 기록은 보존합니다. POC 성공은 제품 전체 기능 또는 공식 평가 통과를 뜻하지 않습니다.
 
 - [S1 / CHK-15 첫 정적 POC](pocs/s1-apk-obfuscation/README.md): 실제 SDK의 DEX/smali 추출과 직접 만든 R8 비교 APK를 검증했습니다. 결과는 판단 불가능이며, 합성 판정 시험과 실제 보안 판정을 구분합니다.
+
+- [S2 / CHK-11 모바일 정적 확장](pocs/s2-apk-plaintext/README.md): APK 합성 평문 marker의 위치·해시 탐지. 원래 실행 명령줄 점검은 미실행이며 보안 판정은 판단 불가능입니다.

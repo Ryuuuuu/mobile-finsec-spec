@@ -89,7 +89,7 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 |CHK-08|악성코드 방지|E|미구현|없음|G4 무해한 탐지 fixture|
 |CHK-09|보안프로그램 동작 여부|E|미구현; 모바일 확장 provisional|없음|G4 보호 기능 기대조건|
 |CHK-10|보안프로그램 임의해제 방지|E|미구현; 모바일 확장 provisional|없음|G4 허용 해제·복원 승인|
-|CHK-11|프로그램 실행 명령줄 내 중요정보 평문 노출 방지|S|미구현; 모바일 경로 별도 정의|없음|G5 허용 관찰·중요정보 기준|
+|CHK-11|프로그램 실행 명령줄 내 중요정보 평문 노출 방지|S|S2 APK 합성 문자열 위치 탐지; 원래 실행 명령줄 관찰 미구현|합성 15시험 + 자체 QA APK 로컬 분석; 실기기 미실행|G5 허용 실행 관찰·중요정보 기준|
 |CHK-12|HTS 구동시 실행 파라미터 재사용 방지|N|모바일 MVP 제외, 카탈로그 보존|없음|HTS 별도 범위 승인 전 실행 안 함|
 |CHK-13|이용자 입력정보 보호|U|미구현; P1 password 거부는 자체 안전장치|없음|G6 필드별 보호 요구/관찰|
 |CHK-14|프로그램 무결성 검증|E|미구현; APK hash guard는 검사 아님|없음|G4/G5 OS 설치 거부와 앱 방어 구분|
@@ -136,3 +136,7 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 S1 [내구성 후속](../pocs/s1-apk-obfuscation/docs/DEX-DURABILITY.md): 실제 두 DEX/24 MiB 패딩 QA APK 추출, 크기 제한 거부와 강제 JVM timeout을 검증했다. 37개 회귀 통과. native/WebView/resource는 명시적으로 미분석이며, 패딩 APK는 대형 코드/메서드 성능 시험이 아니다.
 
 S1 [자원 예산 후속](../pocs/s1-apk-obfuscation/docs/RESOURCE-BUDGETS.md): 기본 32 MiB는 유지하되 명시적인 64 MiB 예산으로 약 36 MiB 패딩 QA APK의 실제 SDK 추출을 확인했다. 스트리밍 ZIP/해시 처리, 압축·메타데이터·디스크·시간·심볼 상한과 부분 실패를 검증했고 51개 회귀가 통과했다. 금융 APK 표본 호환율, 대형 코드 성능, 전체 프로세스 RSS 보장은 측정하지 않았다.
+
+### S2 모바일 정적 확장 (2026-11-18)
+
+[S2 범위와 원래 CHK-11 차이](../pocs/s2-apk-plaintext/README.md), [검증 결과](../pocs/s2-apk-plaintext/VALIDATION.md). 공개 합성 marker의 APK 바이트 위치만 탐지합니다. 원래 명령줄 점검은 미실행/판단 불가능이며 금융 앱 평문 노출 평가 완료가 아닙니다.
