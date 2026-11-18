@@ -150,3 +150,7 @@ S2 1.1은 UTF-16LE/BE 고정 샘플 표현 및 결과 이름 해시화를 추가
 ### P4 local HTTP preparation (2026-11-18)
 
 [Ollama loopback adapter](../pocs/p4-integration/docs/OLLAMA-LOCAL-PREPARATION.md): 6 local mock HTTP tests passed; full P4 142 tests / 141 passed / 1 existing privilege skip. Real model and Supervisor admission are not verified/enabled. Cancellation after submission remains unknown with no automatic retry; durable recovery integration remains pending.
+
+### Active scope change: structure only (2026-11-18)
+
+The user authors assessment skills/tools with skill-creator. Stop check-content/tool/verdict implementation and testing. [Current structural scope](../pocs/p4-integration/docs/STRUCTURE-ONLY-SCOPE.md) covers opaque common/platform skill delivery, sequential orchestration, exclusivity, liveness/error monitoring and provider adapters. Historical check-specific results remain historical; user skills are not validated by them.

@@ -41,3 +41,5 @@
 - [S1 / CHK-15 첫 정적 POC](pocs/s1-apk-obfuscation/README.md): 실제 SDK의 DEX/smali 추출과 직접 만든 R8 비교 APK를 검증했습니다. 결과는 판단 불가능이며, 합성 판정 시험과 실제 보안 판정을 구분합니다.
 
 - [S2 / CHK-11 모바일 정적 확장](pocs/s2-apk-plaintext/README.md): APK 합성 평문 marker의 위치·해시 탐지. 원래 실행 명령줄 점검은 미실행이며 보안 판정은 판단 불가능입니다.
+
+현재 사용자 지시에 따라 점검 스킬 내용·사용 도구·취약점 판정 구현/시험은 중단하고 [모의 스킬 기반 구조 검증](pocs/p4-integration/docs/STRUCTURE-ONLY-SCOPE.md)만 진행합니다. 점검 스킬은 사용자가 skill-creator로 직접 작성합니다. 기존 항목별 결과는 과거 POC 기록입니다.

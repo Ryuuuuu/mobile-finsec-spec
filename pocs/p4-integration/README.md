@@ -147,3 +147,7 @@ Providers remain fake-a/fake-b; no model API key, ADB, or device security change
 Provider implementation and retry/logging limits are reviewed in the [provider boundary audit](docs/PROVIDER-BOUNDARY-AUDIT.md). Both fake names share one implementation; real model compatibility remains unverified.
 
 A separate [Ollama loopback HTTP preparation adapter](docs/OLLAMA-LOCAL-PREPARATION.md) is tested against a local mock server. It is not admitted to Supervisor and does not claim real model execution or remote cancellation.
+
+## Active user scope
+
+[Structure-only scope](docs/STRUCTURE-ONLY-SCOPE.md) supersedes further check-content/verdict testing. User-authored skills and tools are outside current implementation scope. Use opaque mock skills and the selected structural tests; do not use the historical full suite as current acceptance.
