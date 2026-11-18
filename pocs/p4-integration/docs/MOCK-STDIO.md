@@ -29,3 +29,15 @@ The test client imposes a five-second response/process deadline and does not ret
 Run `python -m unittest discover -s tests -p test_mock_stdio.py -v` from pocs/p4-integration, or use the current explicit structural runner. Remaining gates: actual Rust-Python communication, native GPUI rendering, concurrent request correlation, slow-reader/backpressure handling, large-frame stress, crash at every storage boundary, authenticated product transport and user-project lifecycle.
 
 Windows/Python 3.12.10 validation: 3 subprocess tests passed; the full explicit structural runner passed 97 tests, zero skips.
+
+## Delayed-response and blocked-pipe follow-up
+
+The original child-process tests used a test-only client without a reusable uncertain-channel policy. A real integration must not consume a delayed reply as the reply to a subsequent command. `integration.stdio_client.StdioClient` now provides a synchronous Python reference client (run outside the UI thread), a validated startup handshake, one outstanding request, bounded replies and a deadline covering both pipe writes and reads. It invokes only trusted launcher argv without a shell.
+
+A timeout, EOF, malformed frame or response identity mismatch permanently marks that connection uncertain. Further calls are refused; no automatic request retry, new command ID or reconnect occurs. Late replies are never consumed for a new request. `close()` ends only the owned mock child, with bounded wait and forced termination when necessary. This does not prove prior work was cancelled or authorize clearing a durable admission/lease. Restart still returns recovery_required for a known command. Known completed command duplicates on a live process return the same execution ID; changed payloads conflict.
+
+Four additional actual-process tests passed: (1) identical and changed command payloads; (2) admission committed before an artificially delayed reply, client deadline, stale reply arrival, unusable channel and restart protection; (3) EOF and wrong-project reply; (4) a child that stops reading stdin, bounded write deadline and owned-process cleanup. Delay injection exists only in test subprocess code; it is not a production worker option. The admission test does not assert mid-task cancellation, because task scheduling/completion can precede termination.
+
+The reference client discards child stderr rather than exposing arbitrary diagnostics; future product logging needs its own bounded private log channel. Concurrency rejection is implemented but not independently stressed. Real Rust IPC, GPUI dispatch, arbitrary external tools, descendant-process cleanup, authenticated network transport and a fully asynchronous production client remain unverified. Tests use no inspection content, credentials, device or model.
+
+Full structural regression after the client addition: 101 tests passed, zero skips.

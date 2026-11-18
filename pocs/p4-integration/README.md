@@ -14,7 +14,7 @@ This explicit suite list excludes historical P3-backed tests and the legacy demo
 
 The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen, authenticated network IPC or real model/device integration is established by these tests.
 
-Validation on Windows/Python 3.12.10: the explicit runner executed 97 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
+Validation on Windows/Python 3.12.10: the explicit runner executed 101 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
 
 ## Current design and validation links
 
