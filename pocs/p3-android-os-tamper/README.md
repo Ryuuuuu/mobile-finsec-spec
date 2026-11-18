@@ -107,3 +107,7 @@ The sibling P1 source is required for the shared device lease. Stop P1 and verif
 Follow-up verification is documented in [read-only validation](docs/ANDROID-READONLY-VALIDATION.md).
 
 Validate a saved read-only report without contacting any device: `python -m android_probe --validate --output C:\QA\private-p3-run`. Successful validation means the report is internally consistent; the security verdict remains inconclusive.
+
+## Offline comparison/resume preparation
+
+See [normal/tampered QA comparison and recovery](docs/DEVICE-COMPARISON-RESUME.md). The pure resume_gate checks preparation declarations only; it never executes a device or grants a security verdict. Fixture tests extend the existing synthetic evaluator without treating root indicators as application detection proof.

@@ -142,3 +142,7 @@ S1 [자원 예산 후속](../pocs/s1-apk-obfuscation/docs/RESOURCE-BUDGETS.md): 
 [S2 범위와 원래 CHK-11 차이](../pocs/s2-apk-plaintext/README.md), [검증 결과](../pocs/s2-apk-plaintext/VALIDATION.md). 공개 합성 marker의 APK 바이트 위치만 탐지합니다. 원래 명령줄 점검은 미실행/판단 불가능이며 금융 앱 평문 노출 평가 완료가 아닙니다.
 
 S2 1.1은 UTF-16LE/BE 고정 샘플 표현 및 결과 이름 해시화를 추가했습니다. 실제 2-DEX QA APK의 6개 위치를 검증했지만 문자열 의미 분석·compiled resource 구조 추출·원래 명령줄 관찰은 미실행입니다.
+
+### P3 실기기 비교 재개 준비 (2026-11-18)
+
+[비교·오류·재개 명세](../pocs/p3-android-os-tamper/docs/DEVICE-COMPARISON-RESUME.md)와 순수 준비 gate를 추가했습니다. 전체 85시험 중 84통과/기존 권한 관련 1skip. 정상·변조 상태 근거 및 같은 보호 서비스 oracle을 fixture로 검증했으며 실기기 비교는 미실행입니다. 준비 gate는 자동 실행/보안 판정을 하지 않습니다.
