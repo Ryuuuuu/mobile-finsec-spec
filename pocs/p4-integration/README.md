@@ -163,3 +163,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [Live logs and final history](docs/RUN-HISTORY.md) separate execution lifecycle from sealed result storage and list multiple UTC-dated runs. Assessment labels are fixed test values only.
 
 [Start/preflight API](docs/START-PREFLIGHT.md) validates mock device/item selection and prerequisites independently of models, with disabled reasons, command deduplication and disconnect checks.
+
+[Integrated structural acceptance](docs/INTEGRATED-STRUCTURE.md) connects start selection through source-format synthetic recording, live logs, scoped packet bytes, sealed results and multi-run history; includes failure/restart boundaries.

@@ -178,3 +178,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Mock device/item preflight and start API
 
 [Model-independent start contract](../pocs/p4-integration/docs/START-PREFLIGHT.md) validates selected mock device/platform/items, exposes prerequisite-disabled reasons, deduplicates commands and rechecks availability after admission and during execution. No actual device capability, root state or judgement skill is implemented.
+
+### Integrated structural acceptance
+
+[Selection-to-history acceptance](../pocs/p4-integration/docs/INTEGRATED-STRUCTURE.md) joins mock inventory/skills, actual-format synthetic P1/P2 files, live logs, packet access and sealed multi-run history. 85 structural tests passed. Corrected missing recording selection handoff and restart-lost admission tracking. Local child exit was tested; real device/model/security checks and OS reboot were not.
