@@ -31,9 +31,11 @@ Success uses the existing mock-ui.v1 envelope. Start/inspect/cancel wrap API dat
 
 ## Evidence and remaining gates
 
+The JSON tests described here are in-process only. Subsequent [Python-to-Python pipe tests](MOCK-STDIO.md) executed real child-process communication, response deadlines, shutdown and cleanup/restart handling. Those later results do not establish Rust-to-Python IPC or native GPUI execution.
+
 Three new Python async tests **executed and passed**: serialized recording/preflight/start/live/final-history flow, duplicate command reuse, bounded/invalid requests and sanitized errors, cancellation, and history with no connected mock device. These use real facade/runner code with opaque mock skills and synthetic artifacts; no inspection content or assessment logic is added.
 
-Rust library and Rust test sources both **compiled to metadata successfully** with rustc 1.100.0. Rust tests were **not executed** and no executable was linked. This checks parsing/type checking only, not runtime behavior or compatibility with GPUI dependencies. No actual Rust-to-Python IPC, HTTP authentication, service shutdown, GPUI crate resolution, native rendering or Korean input was tested.
+Rust library and Rust test sources both **compiled to metadata successfully** with rustc 1.100.0. Rust tests were **not executed** and no executable was linked. This checks parsing/type checking only, not runtime behavior or compatibility with GPUI dependencies. This metadata/JSON stage did not test process shutdown; later mock Python shutdown results are linked above. Actual Rust-to-Python IPC, HTTP authentication, GPUI crate resolution, native rendering and Korean input remain unverified.
 
 Reproduce from pocs/p4-integration with the prepared Python environment:
 

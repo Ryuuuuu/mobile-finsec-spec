@@ -39,7 +39,7 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 
 [Native GPUI preparation](docs/GPUI-NATIVE-PREPARATION.md) records missing build prerequisites, a read-only probe and a reproducible mock screen/API integration plan. Native compilation and rendering remain not run.
 
-[Serialized UI boundary and Rust preparation](docs/UI-WIRE-PREPARATION.md): actual Python JSON round-trip tests pass; independent Rust state/test metadata compiles. No GPUI window or cross-process transport is claimed.
+[Serialized UI boundary and Rust preparation](docs/UI-WIRE-PREPARATION.md) covers in-process Python JSON tests and Rust metadata-only compilation. Subsequent [Python-to-Python pipe tests](docs/MOCK-STDIO.md) verify actual child-process communication and cleanup; Rust-to-Python IPC and native GPUI remain unverified.
 
 ## Historical demos (not current instructions)
 
