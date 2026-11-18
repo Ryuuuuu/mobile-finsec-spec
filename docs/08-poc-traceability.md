@@ -194,3 +194,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Serialized UI boundary / Rust preparation
 
 [Mock JSON handoff and Rust guard](../pocs/p4-integration/docs/UI-WIRE-PREPARATION.md) adds executed Python integration tests and Rust metadata-only compilation. Rust/CMake are now installed; MSVC approval remains pending. GPUI rendering, Rust test execution and authenticated IPC remain unverified.
+
+### Actual mock process boundary
+
+[Python child-process IPC](../pocs/p4-integration/docs/MOCK-STDIO.md) validates real inherited-pipe requests, EOF termination, forced process termination and durable restart admission. Mock tasks only; no Rust client, GPUI window, model or device execution.
