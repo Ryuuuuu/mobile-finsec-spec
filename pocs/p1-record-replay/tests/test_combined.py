@@ -106,6 +106,57 @@ class ReplayTests(CombinedTests):
             self.assertEqual(run.link['input_status'],'failed');self.assertEqual(run.state,'partial')
 
 class NetworkLifecycleTests(unittest.TestCase):
+    def test_invalid_tls_fails_before_creating_event_loop(self):
+        from pc.combined_ui import Network
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory() as root:
+            with patch('pc.combined_ui.asyncio.new_event_loop',side_effect=AssertionError('unexpected loop')):
+                with self.assertRaises(FileNotFoundError):Network(root,pki=Path(root)/'missing-pki')
+
+    def test_timed_out_setup_exposes_same_cleanup_owner(self):
+        from pc.combined_ui import Network
+        from unittest.mock import patch
+        import sys
+        sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'p2-proxy-relay'))
+        from relay import Relay
+        release=threading.Event();original=Relay.start;calls=[]
+        async def delayed(relay):
+            calls.append('start');await asyncio.to_thread(release.wait);await original(relay)
+        class ShortNetwork(Network):
+            _setup_timeout=.03
+            _close_timeout=.03
+        with tempfile.TemporaryDirectory() as root,patch.object(Relay,'start',delayed):
+            owner=None
+            try:
+                with self.assertRaisesRegex(RuntimeError,'cleanup unconfirmed') as caught:ShortNetwork(root)
+                owner=caught.exception.cleanup_network
+                self.assertTrue(owner.thread.is_alive());self.assertFalse(owner.closed)
+                with self.assertRaisesRegex(RuntimeError,'closing'):owner.command('ON')
+            finally:
+                release.set()
+                if owner is not None:owner._close_timeout=3;owner.close()
+            self.assertEqual(calls,['start']);self.assertTrue(owner.closed)
+            self.assertFalse(owner.server.is_serving());self.assertFalse(owner.thread.is_alive())
+
+    def test_invalid_output_startup_releases_resources_before_retry(self):
+        from pc.combined_ui import Network
+        instances=[]
+        class CapturedNetwork(Network):
+            def __new__(cls,*args,**kwargs):
+                instance=super().__new__(cls);instances.append(instance);return instance
+        with tempfile.TemporaryDirectory() as root:
+            invalid=Path(root)/'not-directory';invalid.write_text('synthetic')
+            try:
+                with self.assertRaises(OSError):CapturedNetwork(invalid)
+                self.assertTrue(instances[0].closed)
+                self.assertFalse(instances[0].thread.is_alive())
+                self.assertFalse(instances[0].server.is_serving())
+                fresh=Network(Path(root)/'retry')
+                fresh.close();self.assertTrue(fresh.closed)
+            finally:
+                for instance in instances:
+                    if not instance.closed:instance.close()
+
     def test_relay_close_error_still_releases_fixture_listener_and_loop(self):
         from pc.combined_ui import Network
         with tempfile.TemporaryDirectory() as root:

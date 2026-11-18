@@ -5,12 +5,12 @@ from .mirror import MirrorWindow
 from .combined import CombinedRun,NetworkStartRejected
 
 class Network:
+    _setup_timeout=15
+    _close_timeout=15
     def __init__(self,output,pki=None,websocket=False):
-        self.closed=False;self._shutdown_future=None;self._close_error=None;self._close_timeout=15
+        self.closed=False;self._shutdown_future=None;self._close_error=None
         sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'p2-proxy-relay'))
         from relay import Config,Relay
-        self.loop=asyncio.new_event_loop();self.thread=threading.Thread(target=self.loop.run_forever,daemon=True);self.thread.start()
-        self.tasks=set()
         context=None
         if pki:
             pki=pathlib.Path(pki)
@@ -19,6 +19,8 @@ class Network:
         if websocket:
             from websocket_relay import read_frame
             from websockets.frames import Frame,OP_CLOSE
+        self.tasks=set();self.server=None;self.relay=None
+        self.loop=asyncio.new_event_loop();self.thread=threading.Thread(target=self.loop.run_forever,daemon=True);self.thread.start()
         async def setup():
             async def echo(reader,writer):
                 task=asyncio.current_task();self.tasks.add(task)
@@ -54,8 +56,18 @@ class Network:
                 upstream_tls=bool(pki),upstream_ca=pki/'assets/qa-ca.pem' if pki else None))
             await self.relay.start()
             return await self.relay.command(dict(schema_version=1,command_id=uuid.uuid4().hex,command='ON'))
-        result=asyncio.run_coroutine_threadsafe(setup(),self.loop).result(15)
-        if not result['ok']:raise RuntimeError('Network setup failed')
+        self._setup_future=asyncio.run_coroutine_threadsafe(setup(),self.loop)
+        try:
+            result=self._setup_future.result(self._setup_timeout)
+            if not result['ok']:raise RuntimeError('Network setup failed')
+        except Exception as error:
+            try:self.close()
+            except Exception:
+                if not self.closed:
+                    failure=RuntimeError('Network initialization failed; cleanup unconfirmed')
+                    failure.cleanup_network=self
+                    raise failure from error
+            raise
         self.port=result['result']['listen_port']
     def command(self,name,**extra):
         if self._shutdown_future is not None:raise RuntimeError('Network closing or closed')
@@ -70,9 +82,15 @@ class Network:
             if self._close_error is not None:raise self._close_error
             return
         async def shutdown():
-            try:await self.relay.close()
+            # A timed-out constructor may still be creating resources. Join that same
+            # setup before cleanup rather than letting a late setup outlive its owner.
+            try:await asyncio.wrap_future(self._setup_future)
+            except Exception:pass
+            try:
+                if self.relay is not None:await self.relay.close()
             finally:
-                try:self.server.close();await self.server.wait_closed()
+                try:
+                    if self.server is not None:self.server.close();await self.server.wait_closed()
                 finally:
                     for task in list(self.tasks):task.cancel()
                     if self.tasks:await asyncio.gather(*self.tasks,return_exceptions=True)
