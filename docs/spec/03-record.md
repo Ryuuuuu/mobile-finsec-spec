@@ -14,7 +14,7 @@ REC-001~005. 기록 탭은 입력과 packet 기록만 담당한다. 점검 check
 
 점검 시작 시 순서와 기록 참조를 고정하고, 앞 동선의 실행·수집 정리가 확인된 뒤 다음 동선을 허용한다. 중간 실패·취소 시 전체 중단/실패 동선 건너뛰기/명시적 재시도 정책은 사용자 확인 전 미확정이다. 결과 불명 상태에서 다음 동선을 자동 실행하거나 이전 동선을 재전송하지 않는다. 기록 미선택의 앱 실행 기본 동선은 기존 계약을 유지한다.
 
-[네이티브 구조 POC](../../pocs/p4-integration/docs/NATIVE-WORKSPACE.md)는 복수 선택과 모의 순차 실행을 검증한다. 실제 P1 기기 재생 큐, 영속 큐 복구와 동선별 실시간 프록시 수집 연결은 별도 구현·실기기 검증 과제다.
+[네이티브 구조 POC](../../pocs/p4-integration/docs/NATIVE-WORKSPACE.md)는 복수 선택과 모의 순차 실행을 검증한다. [P1 결합 GUI 큐](../../pocs/p1-record-replay/docs/REPLAY-QUEUE.md)는 A34에서 두 실제 동선의 순서 변경·반복 재생 및 동선별 P2 수집을 검증했다. GPUI에서 실제 큐를 호출하는 API 연결과 영속 큐 복구는 남은 과제다.
 
 `RecordingCoordinator`가 Device Input Gateway와 Proxy Recorder에 하나의 recording_id 및 시작/종료 boundary를 배포한다. 입력 캡처는 Appium 실행과 별개다. PC 입력을 gateway에 제출할 때 action intent를 먼저 기록하고 dispatch/result를 연결한다. 실제 수행되지 않은 click을 완료된 route step처럼 표시하지 않는다. action intent의 영속 저장이 실패하면 실제 dispatch를 금지한다. dispatch 이후 outcome 기록 실패는 실행 결과 불명으로 남기며 자동 재전송하지 않는다.
 

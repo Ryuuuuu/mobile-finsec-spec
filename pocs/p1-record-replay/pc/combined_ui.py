@@ -1,6 +1,6 @@
 """QA-only integrated GUI. P2 runs independently on an owned asyncio loop."""
 import argparse,asyncio,pathlib,sys,threading,uuid,re,ssl,hashlib,base64,subprocess,tkinter as tk
-from tkinter import messagebox,ttk
+from tkinter import messagebox,ttk,filedialog
 from .mirror import MirrorWindow
 from .combined import CombinedRun,NetworkStartRejected
 
@@ -169,11 +169,48 @@ class CombinedWindow(MirrorWindow):
         except Exception:
             self.reservation.poison('Combined GUI initialization failed; verify owned resources');self.reservation.end();network.close();raise
         self.sync=CombinedRun(self.engine,network,args.output)
+        from .replay_queue import ReplayQueue
+        self.replay_queue=ReplayQueue(self.sync,args.output)
         self.engine.start=self.sync.start;self.engine.finish=self.sync.finish;self.engine.replay=self.sync.replay
         root.title('Finsec P1 + P2 - COMBINED QA RECORDING')
         self.postid.set('dev.finsec.qa.network:id/state');self.posttext.set('ready')
         self.sync_status=tk.StringVar();ttk.Label(self.post_selector.master,textvariable=self.sync_status,wraplength=300).pack()
+        button=ttk.Button(self.post_selector.master,text='Select ordered replay queue',command=self.select_queue)
+        button.pack(fill='x');self.replay_disabled.append(button)
         self.sync_tick()
+    def select_queue(self):
+        if not self.ready() or self.engine.mode!='idle':return
+        paths=list(filedialog.askopenfilenames(filetypes=[('Route JSON','*.json')]))
+        if not paths:return
+        from . import protocol
+        try:
+            routes=[protocol.load(path) for path in paths]
+            if any(route['package_id']!=self.adapter.package for route in routes):raise ValueError('Selected package mismatch')
+        except Exception as error:self.status.set(str(error));return
+        dialog=tk.Toplevel(self.root);dialog.title('Review ordered replay queue');dialog.transient(self.root);dialog.grab_set()
+        listing=tk.Listbox(dialog,width=90,height=min(12,len(routes)),exportselection=False);listing.pack(fill='both')
+        def refresh():
+            listing.delete(0,'end')
+            for i,route in enumerate(routes):listing.insert('end',str(i+1)+' | '+route['recording_id']+' | '+str(len(route['actions']))+' actions')
+        def move(delta):
+            selected=listing.curselection()
+            if not selected:return
+            old=selected[0];new=old+delta
+            if 0<=new<len(routes):routes[old],routes[new]=routes[new],routes[old];refresh();listing.selection_set(new)
+        refresh()
+        ttk.Button(dialog,text='Move up',command=lambda:move(-1)).pack()
+        ttk.Button(dialog,text='Move down',command=lambda:move(1)).pack()
+        ttk.Label(dialog,text='Sequential on one device. Separate results and packet IDs.\nNo automatic app reset unless the explicit QA fixture owner prepared one.\nFailure/cancellation stops remaining routes in this POC. No automatic retry.').pack()
+        def start():
+            if not messagebox.askyesno('Replay queue review','Run these ordered QA routes? Actions may change app/server data. Recorded initial conditions must hold before each route.',parent=dialog):return
+            dialog.destroy()
+            self.submit(lambda:self.replay_queue.run(routes),lambda result:self.status.set('Queue '+result['status']+' / '+str(self.replay_queue.journal.path/'queue.json')))
+        ttk.Button(dialog,text='Run ordered queue',command=start).pack()
+        ttk.Button(dialog,text='Dismiss',command=dialog.destroy).pack()
+    def cancel(self):
+        if self.replay_queue.running:
+            self.replay_queue.cancel();self.status.set('Queue cancellation requested; remaining routes will not start');return
+        super().cancel()
     def prepare_fixture(self,protocol):
         from device_resources import OwnedReverse
         self.reverse_mapping=OwnedReverse(self.args.adb,self.args.device,self.network.port)
@@ -211,6 +248,7 @@ class CombinedWindow(MirrorWindow):
             self.tasks.put((work,None))
     def close(self):
         if self.closing:return
+        if getattr(self,'replay_queue',None) is not None:self.replay_queue.cancel()
         def cleanup_network():
             try:
                 self.sync.abort('Window closed')
