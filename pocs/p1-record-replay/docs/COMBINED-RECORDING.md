@@ -114,7 +114,7 @@ A real invalid-output-path test reproduced another leak: Network created its fix
 
 For a timed-out setup, cleanup waits for the original setup future before closing anything it eventually creates. It does not start a second setup or infer that timeout cancelled resource creation. If the bounded cleanup wait also expires, construction raises an initialization/cleanup-unconfirmed error with a local cleanup_network owner reference. That owner rejects new commands and a controller can later call close on the retained future. A gate test verifies exactly one setup, explicit unresolved ownership, release and confirmed teardown. This handle is local Python state, not an API payload or a durable recovery record.
 
-An automatic GUI recovery controller, persistence across process exit, arbitrary OS allocation failure and permanent stuck transport remain unimplemented/unverified. Callers must retain/reconcile the exposed pending owner rather than treating the constructor exception as proof that resources were never created. This follow-up supersedes the earlier constructor-failure gap for the tested paths only.
+At this stage, automatic GUI recovery was unimplemented; the startup cleanup owner integration below now handles retained constructor owners. Persistence across process exit, arbitrary OS allocation failure and permanent stuck transport remain unimplemented/unverified. Callers must retain/reconcile the exposed pending owner rather than treating the constructor exception as proof that resources were never created. This follow-up supersedes the earlier constructor-failure gap for the tested paths only.
 
 Validation: test_combined.py 28/28 PASS (2.396s), with ResourceWarning promoted to error; no pending-task/unclosed-resource warning in the final log. Uses actual local Network/Relay, a real invalid directory target, a preflight-order guard and a controlled startup delay. No GUI, device, model, installation or inspection skill execution. P4's unrelated structural suite was not rerun.
 
@@ -144,3 +144,37 @@ record. Forced process termination loses the controller. Normal established-wind
 cleanup still follows the existing reservation/poison path; this change specifically
 handles network-constructor failure before CombinedWindow exists. P4 and real
 inspection skills were not changed or retested.
+
+## Process exit and restart boundary (offline verification)
+
+The startup controller is not a durable recovery registry. If its process is
+forcibly terminated before CombinedWindow reserves the device, no device lease
+has been acquired and no fixture reverse mapping has been allocated by this
+launcher. Any network database already created may need explicit reconciliation.
+Network generates a new database name on startup; the GUI does not automatically
+discover or reopen an old database. Do not equate a fresh successful startup with
+recovery or completion of the previous capture.
+
+Once the device reservation exists, P1's OS lock and persistent `.active` /
+`.quarantine` markers have different roles. Process death releases the OS lock,
+but markers intentionally block subsequent acquisition. They are not proof that
+Appium or device-side resources have stopped. No PID-only stale-marker removal,
+automatic clearing, reverse cleanup or resume is implemented by this follow-up.
+Reconciliation needs actual owned-resource evidence and must preserve incomplete
+recordings. This offline test never clears a real user's markers.
+
+New `tests/test_lease_process.py` executes actual Python children using the
+existing Lease implementation with Path.home redirected into a temporary folder
+and a synthetic identity. It verifies normal child cleanup then fresh-process
+acquisition; simultaneous-client rejection; forced termination of both ordinary
+and poisoned owners; fresh-process rejection and byte-identical residual markers.
+Two tests passed (1.428s). Existing P1 core regression: 27/27 passed (4.917s).
+Existing P2 real-child kill recovery and historical command response tests: 2/2
+passed (0.382s). The latter confirms that reopening the same database changes
+unfinished capture to interrupted/partial, and an old command acknowledgement
+does not reapply ON in a new session. These are separate tested boundaries, not an
+end-to-end GUI recovery test. No new production defect was reproduced, so this
+change adds regression coverage and clarifies the recovery contract only.
+
+Reproduce from P1: `python -m unittest discover -s tests -p test_lease_process.py -v`.
+No device, model, inspection skill, installation or permission change was involved.
