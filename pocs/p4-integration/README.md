@@ -157,3 +157,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [Recording context handoff](docs/RECORDING-CONTEXT.md) covers synthetic P1/P2 references, unselected-recording app-launch intent, explicit missing/partial states and sequential mock-agent delivery.
 
 [Offline P1/P2 file handoff](docs/ARTIFACT-HANDOFF.md) tests current route JSON/link and SQLite formats with synthetic files; it is not real-device or model validation.
+
+[On-demand packet bytes](docs/PACKET-ACCESS.md) adds scoped, revocable mock-agent access to synthetic P2 request/response BLOBs with independent completeness and truncation states.

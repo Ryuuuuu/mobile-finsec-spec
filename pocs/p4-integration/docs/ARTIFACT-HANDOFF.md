@@ -35,3 +35,7 @@ Seven new fixture tests cover actual serializers + selected-agent delivery/persi
 Reproduce from pocs/p4-integration using unittest discovery for test_artifact_reader.py and the structural test selection. Remaining work: production source schema evolution, validated export/copy lifecycle, complete packet/body selection policy, GUI selection/status display, real authorized artifact acceptance, and actual replay/capture integrations. This POC does not establish these capabilities.
 
 Final Windows/Python 3.12.10 validation: 61 selected structural tests passed, zero skips, including all 7 new source-format handoff tests. Private log: p4-artifact-reader-tests.log outside Git.
+
+## On-demand raw-byte follow-up
+
+[Attempt-scoped packet access](PACKET-ACCESS.md) now provides selected mock executors a bounded request/response BLOB read callable. Metadata is still the default context; raw bytes are not eagerly loaded or persisted. The earlier no-BLOB statement describes the metadata-only stage.

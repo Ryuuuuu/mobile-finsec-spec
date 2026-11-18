@@ -10,6 +10,7 @@ from .lease import LeaseStore, LeaseError
 from .skill_structure import load_skills, provider_context
 from .recording_context import resolve_recording
 from .artifact_reader import read_artifacts
+from .packet_access import PacketGrant
 
 
 class MockExecutor:
@@ -45,7 +46,7 @@ class StructureSupervisor:
         run_id='synthetic-'+uuid4().hex
         output=self.root/run_id;output.mkdir()
         rows=[dict(item_id=i,execution_status='not_run',reason='NOT_REACHED',recording_context=deepcopy(recording)) for i in items]
-        events=[];token=None;active=None;current=None;safe=True
+        events=[];token=None;active=None;current=None;safe=True;grant=None
         result=dict(contract='structure-run.v1',run_id=run_id,synthetic=True,
                     execution_status='not_run',items=rows,events=events,recovery_required=False)
         def emit(kind,**data):events.append(dict(seq=len(events)+1,type=kind,**data))
@@ -74,7 +75,13 @@ class StructureSupervisor:
                     last_progress=time.monotonic()
                 context=provider_context(snapshots[index]);context['item_id']=item
                 context['recording_context']=deepcopy(recording)
-                if artifact_data is not None:context['artifact_data']=deepcopy(artifact_data)
+                if artifact_data is not None:
+                    context['artifact_data']=deepcopy(artifact_data)
+                    if recording.get('packet_status') in ('complete','partial') and 'packets' in recording.get('source_hashes',{}):
+                        grant=PacketGrant(artifact_files['packets'],recording['recording_id'],artifact_data['network_recording_id'],
+                                          recording['source_hashes']['packets'],lambda t=token:self.lease.authorize(t,'mock.execute'))
+                        # Function closure preserves the same revocable grant across deepcopy.
+                        context['read_packet']=lambda rid,pid,side,g=grant:g.read(rid,pid,side)
                 active=asyncio.create_task(self.executor.run(deepcopy(context),progress))
                 failure=None
                 while not active.done():
@@ -93,6 +100,8 @@ class StructureSupervisor:
                 if reply!={'execution_status':'completed'}:
                     rows[index].update(execution_status='failed',reason='EXECUTOR_EXIT_OR_INVALID_RESULT')
                     result['execution_status']='failed';break
+                if grant is not None:
+                    grant.revoke();rows[index]['packet_access_statuses']=list(grant.audit);grant=None
                 rows[index].update(execution_status='completed',reason='EXECUTED')
                 emit('item_completed',item_id=item)
                 self.lease.begin_cleanup(token)
@@ -106,6 +115,9 @@ class StructureSupervisor:
             result['execution_status']='failed';result['reason']='STRUCTURE_ERROR'
             if current is not None:rows[current].update(execution_status='failed',reason='STRUCTURE_ERROR')
         finally:
+            if grant is not None:
+                grant.revoke()
+                if current is not None:rows[current]['packet_access_statuses']=list(grant.audit)
             if active is not None and not active.done():
                 active.cancel()
                 done,_=await asyncio.wait({active},timeout=0.05)

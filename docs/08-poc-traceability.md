@@ -166,3 +166,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### P1/P2 source-format structural handoff
 
 [Offline artifact reader](../pocs/p4-integration/docs/ARTIFACT-HANDOFF.md) reads synthetic files produced by the P1 JSON writer and P2 SQLite Store. 61 structural tests passed; missing/corrupt/partial/version/unsealed states and detached sequential handoff are checked. Raw packet BLOBs, real-device replay/capture and actual model execution remain outside this test.
+
+### Scoped packet-byte structural access
+
+[On-demand packet access](../pocs/p4-integration/docs/PACKET-ACCESS.md) allows selected mock executors to read synthetic request/response bytes by common record ID and packet ID. Grants are fenced/revoked, bounded and independent of collection completeness. Raw data is not persisted; OS/model gateway isolation and real packet acceptance remain unverified.

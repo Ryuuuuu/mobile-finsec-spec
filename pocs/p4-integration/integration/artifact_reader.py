@@ -106,6 +106,7 @@ def read_artifacts(link_path,route_path,db_path):
                      or record.get('persisted_packets')!=count or bool(record.get('gaps')) or any(p['incomplete'] for p in packets))
             summary.update(packet_status='partial' if partial else 'complete',packet_count=count)
             payload['packets']=packets
+            payload['network_recording_id']=link['network_recording_id']
         after=hashlib.sha256(bounded(db,16*1024*1024)).hexdigest()
         if before!=after:raise ValueError('ARTIFACT_CHANGED')
         summary['source_hashes']['packets']=after
