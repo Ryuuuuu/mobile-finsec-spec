@@ -1,7 +1,7 @@
 """In-process UI projection for a mock client, not a GPUI or HTTP implementation."""
-import hashlib,json,re
+import json,re
 from .artifact_reader import bounded,read_artifacts
-from .run_journal import list_runs,read_json
+from .run_journal import list_runs,read_final
 
 class UIBridge:
     def __init__(self,project_id,api):self.project_id=project_id;self.api=api
@@ -71,14 +71,13 @@ class UIBridge:
         path=self.api.supervisor.root/run_id
         try:
             if path.is_symlink() or not path.resolve().is_relative_to(self.api.supervisor.root.resolve()):raise ValueError('SCOPE')
-            marker,_=read_json(path/'finalized.json',8192);result,data=read_json(path/'result.json')
-            if marker.get('contract')!='structure-history.v1' or result.get('execution_status') not in ('completed','failed','cancelled','timed_out','not_run') or marker.get('run_id')!=run_id or result.get('run_id')!=run_id or marker.get('result_sha256')!=hashlib.sha256(data).hexdigest():
-                raise ValueError('INTEGRITY')
+            result=read_final(path)
             # Live events belong to check tab, never the result tab.
             result.pop('events',None)
             return self.envelope(generation,status='ok',run_id=run_id,result=result)
-        except FileNotFoundError:return self.envelope(generation,status='not_finalized',run_id=run_id)
-        except (OSError,ValueError,TypeError):return self.envelope(generation,status='corrupt',run_id=run_id)
+        except FileNotFoundError:
+            return self.envelope(generation,status='corrupt' if (path/'finalized.json').exists() else 'not_finalized',run_id=run_id)
+        except (OSError,ValueError,TypeError,KeyError,AttributeError):return self.envelope(generation,status='corrupt',run_id=run_id)
 
 class MockUIClient:
     def __init__(self,project_id):

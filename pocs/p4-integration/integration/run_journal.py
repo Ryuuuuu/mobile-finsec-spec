@@ -37,6 +37,27 @@ def read_json(path,limit=2*1024*1024):
     return json.loads(data),data
 
 
+def read_meta(path):
+    path=Path(path);meta,_=read_json(path/'run-meta.json',8192)
+    if (meta['contract']!='structure-history.v1' or meta['run_id']!=path.name
+            or not isinstance(meta['started_at'],str)):raise ValueError('META')
+    datetime.fromisoformat(meta['started_at'])
+    return meta
+
+
+def read_final(path,meta=None):
+    path=Path(path);meta=read_meta(path) if meta is None else meta
+    marker,_=read_json(path/'finalized.json',8192);result,data=read_json(path/'result.json')
+    if (marker.get('contract')!='structure-history.v1' or marker.get('run_id')!=path.name
+        or marker.get('result_sha256')!=hashlib.sha256(data).hexdigest()
+        or result.get('run_id')!=path.name or result.get('started_at')!=meta['started_at']
+        or result.get('execution_status') not in ('completed','failed','cancelled','timed_out','not_run')):
+        raise ValueError('RESULT')
+    # Both history and detail require the fields used to display final state.
+    for key in ('finished_at','completion','recovery_required'):result[key]
+    return result
+
+
 def list_runs(root,date=None,limit=100):
     if type(limit) is not int or not 1<=limit<=100:raise ValueError('INVALID_LIMIT')
     if date is not None:datetime.strptime(date,'%Y-%m-%d')
@@ -46,16 +67,10 @@ def list_runs(root,date=None,limit=100):
         if path.is_symlink() or not path.is_dir():continue
         row=dict(run_id=path.name,storage_status='unfinalized',execution_status=None,started_at=None,finished_at=None)
         try:
-            meta,_=read_json(path/'run-meta.json',8192)
-            if meta['contract']!='structure-history.v1' or meta['run_id']!=path.name:raise ValueError('META')
-            row['started_at']=meta['started_at'];datetime.fromisoformat(meta['started_at'])
+            meta=read_meta(path)
+            row['started_at']=meta['started_at']
             if (path/'finalized.json').exists():
-                marker,_=read_json(path/'finalized.json',8192);result,data=read_json(path/'result.json')
-                if (marker.get('contract')!='structure-history.v1' or marker.get('run_id')!=path.name
-                    or marker.get('result_sha256')!=hashlib.sha256(data).hexdigest()
-                    or result.get('run_id')!=path.name or result.get('started_at')!=row['started_at']
-                    or result.get('execution_status') not in ('completed','failed','cancelled','timed_out','not_run')):
-                    raise ValueError('RESULT')
+                result=read_final(path,meta)
                 row.update(storage_status='finalized',execution_status=result['execution_status'],
                            finished_at=result['finished_at'],completion=result['completion'],
                            recovery_required=result['recovery_required'])

@@ -91,3 +91,19 @@ class UIBridgeTests(unittest.IsolatedAsyncioTestCase):
         with self.assertRaisesRegex(ValueError,'GENERATION_OVERFLOW'):ui.select('check')
         self.assertEqual(ui.tab,'results');self.assertEqual(ui.run_id,'synthetic-selected')
         self.assertFalse(ui.apply(None))
+
+    async def test_reopened_result_rejects_missing_or_mismatched_run_metadata(self):
+        api=self.api();reply=api.submit(self.request());result=await api.wait(reply['execution_id'])
+        rid=result['run_id'];path=api.supervisor.root/rid/'run-meta.json'
+        original=path.read_bytes();meta=json.loads(original)
+        variants=[None,dict(meta,run_id='synthetic-another'),dict(meta,started_at='2020-01-01T00:00:00+00:00'),dict(meta,started_at=123)]
+        for variant in variants:
+            with self.subTest(variant=variant):
+                if variant is None:path.unlink()
+                else:path.write_text(json.dumps(variant),encoding='utf-8')
+                bridge=UIBridge('synthetic-project',api)
+                self.assertEqual(bridge.history(0)['runs'],[])
+                self.assertEqual(bridge.result(rid,0)['status'],'corrupt')
+                self.assertEqual(bridge.history(0,date='2020-01-01')['runs'],[])
+                path.write_bytes(original)
+        self.assertEqual(UIBridge('synthetic-project',api).result(rid,0)['status'],'ok')

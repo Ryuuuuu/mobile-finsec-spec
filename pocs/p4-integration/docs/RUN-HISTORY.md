@@ -32,3 +32,24 @@ An initial Windows default-encoding error when adding Korean labels was correcte
 Run test_run_journal.py together with the selected structural suite. Product follow-ups include authenticated result retrieval, full schema validation/migration, pagination/indexing at scale, live stream recovery, local timezone UI and process-liveness reconciliation. These are not silently assumed complete.
 
 Final Windows/Python 3.12.10 validation: 72 selected structural tests passed, zero skips, including 5 new history/log contract tests. Private log p4-run-journal-tests.log remains outside Git.
+
+## Reopened result consistency follow-up
+
+A stored-result defect was reproduced without a device or model: after a sealed
+synthetic run, removing its run metadata or changing the metadata's run ID/start
+time excluded it from history, but direct result lookup still returned `ok`.
+The result detail endpoint now shares metadata, seal/hash, run identity, start
+time and required display-field validation with history. A seal with missing
+metadata/result is corrupt; an absent seal is not finalization. Invalid metadata
+time types no longer escape the date-filter path. No final state is inferred
+from live logs or repaired automatically.
+
+The regression creates an actual structural run with the existing opaque mock
+executor, mutates only temporary synthetic metadata, and reconstructs the UI
+bridge before reading. Missing, wrong-run, mismatched-time and invalid-time-type
+cases are rejected by both history and detail; restoring the original metadata
+restores readability. This exercises persisted reads, not an actual GUI/process
+crash, power-loss durability or authenticated storage. The hashes remain local
+consistency checks rather than protection against an actor rewriting every file.
+
+Validation: explicit structure-only runner 143/143 PASS, zero skips (26.592s).
