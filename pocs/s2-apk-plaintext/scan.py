@@ -6,12 +6,23 @@ from pathlib import Path
 import sys
 import time
 import zipfile
+import zlib
 
 # Shared finite ZIP budgets; no SDK, subprocess, device or network invocation.
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 's1-apk-obfuscation'))
 from apk_budget import Limits, ResourceError, CHUNK, snapshot_inventory, time_guard, storage_guard
 
 MARKERS = {'demo_token': b'QA_PLAINTEXT_DEMO_TOKEN_001', 'qa_status': b'QA_INVALID'}
+
+PATTERNS = {(key, encoding): value.decode('ascii').encode(encoding)
+            for key, value in MARKERS.items()
+            for encoding in ('utf-8', 'utf-16le', 'utf-16be')}
+SAFE_REASONS = {'MATCH_LIMIT', 'ANALYSIS_TIMEOUT', 'INPUT_LIMIT', 'UNSAFE_ARCHIVE',
+                'EXPANSION_LIMIT', 'DISK_BUDGET_LIMIT', 'DISK_FREE_LIMIT',
+                'SYMLINK_INPUT', 'ARTIFACT_CHANGED_DURING_COPY', 'ENTRY_LIMIT',
+                'CENTRAL_DIRECTORY_LIMIT', 'INVALID_ZIP_DIRECTORY',
+                'UNSUPPORTED_MULTIDISK_ZIP', 'UNSUPPORTED_ZIP64',
+                'ENTRY_SIZE_MISMATCH', 'MANIFEST_MISSING'}
 
 
 def scan(apk, output, limits=None, max_matches=100):
@@ -21,8 +32,10 @@ def scan(apk, output, limits=None, max_matches=100):
     output = Path(output)
     output.mkdir(parents=True, exist_ok=False)
     deadline = time.monotonic() + limits.total_seconds
-    result = dict(schema_version='1.0', check_id='CHK-11-mobile-extension',
+    result = dict(schema_version='1.1', check_id='CHK-11-mobile-extension',
                   scope='apk_static_synthetic_literal', verdict='inconclusive',
+                  representations=list(('utf-8', 'utf-16le', 'utf-16be')),
+                  semantic_extraction='not_run',
                   commandline_observation='not_run', execution_status='failed',
                   literal_observation='unknown', coverage='not_started',
                   artifact=None, completed_entries=0, scanned_bytes=0, matches=[],
@@ -35,7 +48,7 @@ def scan(apk, output, limits=None, max_matches=100):
         result['artifact'] = info
         result['coverage'] = 'partial'
         stage = 'literal_scan'
-        overlap = max(map(len, MARKERS.values())) - 1
+        overlap = max(map(len, PATTERNS.values())) - 1
         with zipfile.ZipFile(output / 'input.apk') as archive:
             for name, entry in entries.items():
                 tail = b''
@@ -49,7 +62,7 @@ def scan(apk, output, limits=None, max_matches=100):
                         data = tail + chunk
                         base = consumed - len(tail)
                         found = []
-                        for marker_id, marker in MARKERS.items():
+                        for (marker_id, encoding), marker in PATTERNS.items():
                             start = 0
                             while True:
                                 pos = data.find(marker, start)
@@ -57,22 +70,23 @@ def scan(apk, output, limits=None, max_matches=100):
                                     break
                                 offset = base + pos
                                 if offset + len(marker) > consumed:
-                                    found.append((offset, marker_id, len(marker)))
+                                    found.append((offset, marker_id, encoding, len(marker)))
                                     if len(found) + len(result['matches']) > max_matches:
                                         # Bounded temporary list too; no unbounded repeated matches.
                                         raise ResourceError('MATCH_LIMIT')
                                 start = pos + 1
-                        for offset, marker_id, length in sorted(found):
-                            result['matches'].append(dict(marker_id=marker_id, entry=name,
+                        for offset, marker_id, encoding, length in sorted(found):
+                            result['matches'].append(dict(marker_id=marker_id, representation=encoding,
+                                entry_id=hashlib.sha256(name.encode('utf-8')).hexdigest(),
                                 offset=offset, length=length, entry_sha256=entry['sha256']))
                         consumed += len(chunk)
                         result['scanned_bytes'] += len(chunk)
                         tail = data[-overlap:]
                 result['completed_entries'] += 1
         result.update(execution_status='completed', coverage='complete', reason_code='SCAN_COMPLETE')
-    except (ResourceError, OSError, ValueError, zipfile.BadZipFile, RuntimeError) as exc:
+    except (ResourceError, OSError, ValueError, zipfile.BadZipFile, RuntimeError, EOFError, zlib.error) as exc:
         # Never serialize external exception text, input paths or entry payloads.
-        reason = str(exc) if isinstance(exc, ResourceError) else 'INPUT_OR_SCAN_ERROR'
+        reason = str(exc) if isinstance(exc, ResourceError) and str(exc) in SAFE_REASONS else 'INPUT_OR_SCAN_ERROR'
         result.update(reason_code=reason, failed_stage=stage)
     if result['matches']:
         result['literal_observation'] = 'found'

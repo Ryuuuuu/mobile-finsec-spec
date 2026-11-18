@@ -59,9 +59,9 @@ class ScanTests(unittest.TestCase):
         self.assertEqual(result['literal_observation'], 'not_observed')
         self.assertEqual(result['verdict'], 'inconclusive')
 
-    def test_encoding_is_not_decoded(self):
+    def test_base64_is_not_decoded(self):
         marker = MARKERS['demo_token']
-        result = self.run_scan(base64.b64encode(marker) + b'|' + marker.decode().encode('utf-16le'))
+        result = self.run_scan(base64.b64encode(marker))
         self.assertEqual(result['matches'], [])
 
     def test_compressed_entry(self):
@@ -115,6 +115,55 @@ class ScanTests(unittest.TestCase):
             with self.assertRaises(ResourceError):
                 self.run_scan()
         self.assertFalse((self.root / 'out' / 'result.json').exists())
+
+    def test_utf16_both_orders_cross_chunk(self):
+        for encoding in ('utf-16le', 'utf-16be'):
+            with self.subTest(encoding=encoding):
+                marker = MARKERS['demo_token'].decode().encode(encoding)
+                p = self.apk(b'x' * (CHUNK - 3) + marker)
+                result = scan(p, self.root / encoding)
+                hit, = result['matches']
+                self.assertEqual(hit['representation'], encoding)
+                self.assertEqual(hit['offset'], CHUNK - 3)
+                self.assertEqual(hit['length'], len(marker))
+
+    def test_sensitive_entry_name_not_serialized(self):
+        result = scan(self.apk(MARKERS['qa_status'], 'assets/PRIVATE_ACCOUNT_NAME'), self.root / 'out')
+        self.assertNotIn('PRIVATE_ACCOUNT_NAME', json.dumps(result))
+        self.assertEqual(result['matches'][0]['entry_id'],
+                         hashlib.sha256(b'assets/PRIVATE_ACCOUNT_NAME').hexdigest())
+
+    def test_external_error_text_redacted(self):
+        import zlib
+        for index, error in enumerate((ResourceError('PRIVATE_SECRET'), zlib.error('PRIVATE_SECRET'),
+                                       EOFError('PRIVATE_SECRET'), NotImplementedError('PRIVATE_SECRET'))):
+            with patch('scan.snapshot_inventory', side_effect=error):
+                result = scan(self.apk(), self.root / str(index))
+            self.assertNotIn('PRIVATE_SECRET', json.dumps(result))
+            self.assertEqual(result['execution_status'], 'failed')
+            self.assertEqual(result['reason_code'], 'INPUT_OR_SCAN_ERROR')
+
+    def test_invalid_zip_no_false_completion(self):
+        path = self.root / 'broken.apk'
+        path.write_bytes(b'not a ZIP')
+        result = scan(path, self.root / 'out')
+        self.assertEqual(result['coverage'], 'not_started')
+        self.assertEqual(result['literal_observation'], 'unknown')
+
+    def test_crc_damage_is_failure(self):
+        path = self.apk(MARKERS['demo_token'])
+        data = path.read_bytes()
+        data = data.replace(MARKERS['demo_token'], b'X' * len(MARKERS['demo_token']), 1)
+        path.write_bytes(data)
+        result = scan(path, self.root / 'out')
+        self.assertEqual(result['execution_status'], 'failed')
+        self.assertEqual(result['literal_observation'], 'unknown')
+
+    def test_nested_gzip_not_decoded(self):
+        import gzip
+        result = self.run_scan(gzip.compress(MARKERS['demo_token'], mtime=0))
+        self.assertEqual(result['matches'], [])
+        self.assertEqual(result['verdict'], 'inconclusive')
 
 
 if __name__ == '__main__':
