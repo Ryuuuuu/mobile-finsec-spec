@@ -14,7 +14,7 @@ This explicit suite list excludes historical P3-backed tests and the legacy demo
 
 The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen or real model/device integration is established by these tests. The minimal authenticated mock loopback adapter is validated separately below; it is not production IPC.
 
-Validation on Windows/Python 3.12.10: the explicit runner executed 154 structural tests, all passed, zero skips. TLS/WSS handoff tests used the existing P2 venv with cryptography; without OpenSSL/cryptography those cases explicitly skip and do not count as protocol validation. This does not execute Rust tests or a GPUI window.
+Validation on Windows/Python 3.12.10: the explicit runner executed 155 structural tests, all passed, zero skips. TLS/WSS handoff tests used the existing P2 venv with cryptography; without OpenSSL/cryptography those cases explicitly skip and do not count as protocol validation. This does not execute Rust tests or a GPUI window.
 
 ## Current design and validation links
 
@@ -37,7 +37,7 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 
 [GPUI contract alignment via mock UI](docs/UI-CONTRACT-BRIDGE.md) tests record/check/result projections, live cursor behavior, finalized history, disconnected/partial/cancel states. No GPUI implementation is claimed.
 
-[Native GPUI preparation](docs/GPUI-NATIVE-PREPARATION.md) records missing build prerequisites, a read-only probe and a reproducible mock screen/API integration plan. Native compilation and rendering remain not run.
+[Native GPUI preparation](docs/GPUI-NATIVE-PREPARATION.md) records the now-verified Windows toolchain and initial native build/input/pipe probes. [Three-tab native workspace](docs/NATIVE-WORKSPACE.md) adds ordered multiple-record selection and mock execution through a real Python child; real multi-route device replay remains unimplemented.
 
 [Serialized UI boundary and Rust preparation](docs/UI-WIRE-PREPARATION.md) covers in-process Python JSON tests and Rust metadata-only compilation. Subsequent [Python-to-Python pipe tests](docs/MOCK-STDIO.md) verify actual child-process communication and cleanup; Rust HTTP/native GPUI remain unverified; the later limited native pipe gate is linked below.
 

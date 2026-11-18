@@ -1,5 +1,7 @@
 """In-process UI projection for a mock client, not a GPUI or HTTP implementation."""
 import json,re
+from datetime import datetime
+from pathlib import Path
 from .artifact_reader import bounded,read_artifacts
 from .run_journal import list_runs,read_final
 
@@ -16,7 +18,21 @@ class UIBridge:
                 summary,_=read_artifacts(files['link'],files['route'],files['packets'])
                 enabled=(summary.get('bundle_status')!='invalid' and
                          all(summary.get(k) in ('complete','partial') for k in ('link_status','route_status','packet_status')))
-                rows.append(dict(ref=ref,selectable=enabled,reason=None if enabled else 'RECORDING_NOT_READY',recording=summary))
+                display_name=ref;recorded_at=None;metadata_valid=True
+                metadata=Path(files['link']).parent/'recording-meta.json'
+                if metadata.exists() or metadata.is_symlink():
+                    try:
+                        if metadata.is_symlink():raise ValueError('SYMLINK')
+                        meta=json.loads(bounded(metadata,8192))
+                        if (set(meta)!={'schema_version','recording_id','display_name','recorded_at'} or meta['schema_version']!=1
+                            or meta['recording_id']!=summary.get('recording_id') or not isinstance(meta['display_name'],str)
+                            or not 1<=len(meta['display_name'])<=100 or any(ord(c)<32 for c in meta['display_name'])
+                            or not isinstance(meta['recorded_at'],str) or datetime.fromisoformat(meta['recorded_at']).tzinfo is None):raise ValueError('METADATA')
+                        display_name=meta['display_name'];recorded_at=meta['recorded_at']
+                    except (OSError,ValueError,KeyError,TypeError):metadata_valid=False
+                enabled=enabled and metadata_valid
+                rows.append(dict(ref=ref,display_name=display_name,recorded_at=recorded_at,selectable=enabled,
+                    reason=('RECORDING_METADATA_INVALID' if not metadata_valid else None if enabled else 'RECORDING_NOT_READY'),recording=summary))
                 if enabled:selectable[ref]=files
             self.api.recordings=selectable  # Commit scan once; admitted jobs already copied their paths.
             return self.envelope(generation,status='ok',recordings=rows)

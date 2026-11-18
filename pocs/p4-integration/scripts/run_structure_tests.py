@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PATTERNS = (
+    'test_native_catalog.py',
     'test_live_relay_handoff.py', 'test_http_child.py', 'test_loopback_api.py', 'test_stdio_recordings.py', 'test_stdio_cleanup.py', 'test_stdio_client.py', 'test_mock_stdio.py', 'test_ui_wire.py', 'test_ui_bridge.py', 'test_integrated_structure.py',
     'test_start_api.py', 'test_run_journal.py', 'test_packet_access.py',
     'test_artifact_reader.py', 'test_recording_context.py',

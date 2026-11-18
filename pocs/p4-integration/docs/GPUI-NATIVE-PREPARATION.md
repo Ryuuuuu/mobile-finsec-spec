@@ -6,7 +6,7 @@ After user-approved Microsoft Build Tools 2022 17.14.45 / MSVC and Windows SDK i
 
 The isolated [native smoke](../gpui-smoke/src/main.rs) pins gpui-kit 0.10.0 and includes the resolved Cargo.lock. `cargo build --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml` succeeded in 3m30s on this machine. Launch the resulting `target/debug/finsec-gpui-smoke.exe`: its Korean/English label and Verify button are exposed through Windows accessibility; an actual click changed the counter from 2 to 3. This verifies native window/input state, not the proposed three-tab application or Python API integration. A screenshot while another window covered it was not treated as rendering evidence. Source startup follows the official Apache-2.0 [example](https://gpui-kit.com/docs/getting-started/). Dependency distribution/license review remains a product task.
 
-The [mock loopback API](LOOPBACK-API.md) and earlier [narrow native pipe probe](NATIVE-RUST-PIPE.md) remain distinct results. The initial smoke had no Python transport; the read-only private-pipe follow-up below now verifies one native UI request. It still has no device/model, inspection skill or verdict logic. Full GPUI record/check/results integration remains unimplemented. The following observations are historical, before installation.
+The [mock loopback API](LOOPBACK-API.md) and earlier [narrow native pipe probe](NATIVE-RUST-PIPE.md) remain distinct results. The initial smoke had no Python transport; the read-only private-pipe follow-up below now verifies one native UI request. It still has no device/model, inspection skill or verdict logic. The later [three-tab native workspace](NATIVE-WORKSPACE.md) implements synthetic record/check/results integration; real P1 device replay and production integration remain unimplemented. The following observations are historical, before installation.
 
 ## Original observed boundary
 
@@ -33,7 +33,7 @@ cl
 
 Preflight exit 0 means names were discovered only; it does not certify versions, SDK, linker or compilation. Confirm an MSVC target, then build the official [getting-started example](https://gpui-kit.com/docs/getting-started/) in an isolated experimental directory using `gpui-kit = "=0.10.0"`. Run `cargo check`, then `cargo run`; retain the resolved lockfile and actual tool versions only after success. Do not use `--locked` before generating the first lockfile. Record dependency/network, compiler/linker and window/input failures separately. Do not accept new installation terms automatically.
 
-## Proposed smallest real screen slice (not implemented)
+## Original proposed smallest real screen slice (see current workspace above)
 
 The approved [workspace](../../../docs/spec/01-app-workspace.md), [check screen](../../../docs/spec/06-run.md) and [results screen](../../../docs/spec/08-evidence-results.md) remain authoritative. Preserve a visible **MOCK / NO DEVICE** indicator and implement only three tabs with synthetic recording selection, one mock item, Start/Cancel, live events and finalized history/detail.
 
