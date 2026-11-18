@@ -21,6 +21,7 @@ import javax.net.ssl.*;
 public class MainActivity extends Activity {
     private TextView status;
     private boolean interactive=false;
+    private boolean webEnabled=false;
     private int count=0;
     private Button nativeButton,webButton;
     private WebView web;
@@ -32,17 +33,17 @@ public class MainActivity extends Activity {
         String token=getIntent().getStringExtra("token");
         int port=getIntent().getIntExtra("port",0);
         if(protocol==null)return;
-        if(!protocol.matches("http|https|ws|wss") || token==null || !token.matches("qa-[a-z0-9-]{1,60}") || port<1024 || port>65535) {
+        if(!protocol.matches("http|https|ws|wss|okhttp-http|okhttp-https") || token==null || !token.matches("qa-[a-z0-9-]{1,60}") || port<1024 || port>65535) {
             status.setText("Rejected invalid fixture arguments");return;
         }
         if(getIntent().getBooleanExtra("interactive",false)) {
-            if(!protocol.equals("http")){status.setText("Interactive fixture supports HTTP only");return;}
+            webEnabled=protocol.equals("http");
             interactive=true;LinearLayout layout=new LinearLayout(this);layout.setOrientation(LinearLayout.VERTICAL);layout.setPadding(24,64,24,24);
             TextView title=new TextView(this);title.setText("P1 + P2 DISPOSABLE QA / LOOPBACK ONLY");layout.addView(title);
             ((android.view.ViewGroup)status.getParent()).removeView(status);
             status.setId(R.id.state);status.setText("ready");layout.addView(status,new LinearLayout.LayoutParams(-1,-2));
-            nativeButton=new Button(this);nativeButton.setId(R.id.send_native);nativeButton.setText("SEND NATIVE HTTP");layout.addView(nativeButton);
-            webButton=new Button(this);webButton.setId(R.id.send_webview);webButton.setText("SEND WEBVIEW HTTP");layout.addView(webButton);
+            nativeButton=new Button(this);nativeButton.setId(R.id.send_native);nativeButton.setText("SEND "+protocol.toUpperCase());layout.addView(nativeButton);
+            webButton=new Button(this);webButton.setId(R.id.send_webview);webButton.setText("SEND WEBVIEW HTTP");webButton.setEnabled(webEnabled);layout.addView(webButton);
             web=new WebView(this);web.getSettings().setJavaScriptEnabled(true);layout.addView(web,new LinearLayout.LayoutParams(-1,200));setContentView(layout);
             nativeButton.setOnClickListener(v->{int n=++count;busy();new Thread(()->run(protocol,port,token+"-native-"+n),"p2-fixture").start();});
             webButton.setOnClickListener(v->{int n=++count;busy();String id=token+"-webview-"+n;
@@ -60,7 +61,7 @@ public class MainActivity extends Activity {
         JSONObject report=new JSONObject();try{report.put("token",token);report.put("protocol","webview-http");report.put("status",ok?"succeeded":"failed");report.put("echo",ok?token:"");report.put("finished_ms",System.currentTimeMillis());
             try(FileOutputStream file=openFileOutput("receipt.json",MODE_PRIVATE)){file.write(report.toString().getBytes(StandardCharsets.UTF_8));}
         }catch(Exception e){ok=false;}
-        status.setText(ok?"sent:"+count:"failed:"+count);nativeButton.setEnabled(true);webButton.setEnabled(true);
+        status.setText(ok?"sent:"+count:"failed:"+count);nativeButton.setEnabled(true);webButton.setEnabled(webEnabled);
     }
     private Socket connect(boolean tls,int port) throws Exception {
         Socket plain=new Socket();plain.connect(new InetSocketAddress("127.0.0.1",port),3000);plain.setSoTimeout(3000);
@@ -76,6 +77,26 @@ public class MainActivity extends Activity {
             SSLParameters params=socket.getSSLParameters();params.setEndpointIdentificationAlgorithm("HTTPS");socket.setSSLParameters(params);
             socket.startHandshake();return socket;
         } catch(Exception e) { plain.close();throw e; }
+    }
+    private String okhttp(boolean tls,int port,String token) throws Exception {
+        okhttp3.OkHttpClient.Builder builder=new okhttp3.OkHttpClient.Builder()
+            .protocols(java.util.Collections.singletonList(okhttp3.Protocol.HTTP_1_1))
+            .retryOnConnectionFailure(false).followRedirects(false).followSslRedirects(false)
+            .callTimeout(5,java.util.concurrent.TimeUnit.SECONDS);
+        if(tls) {
+            KeyStore store=KeyStore.getInstance(KeyStore.getDefaultType());store.load(null);
+            try(InputStream ca=getAssets().open("qa-ca.pem")){store.setCertificateEntry("qa-only",CertificateFactory.getInstance("X.509").generateCertificate(ca));}
+            TrustManagerFactory factory=TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());factory.init(store);
+            X509TrustManager trust=(X509TrustManager)factory.getTrustManagers()[0];
+            SSLContext context=SSLContext.getInstance("TLS");context.init(null,new TrustManager[]{trust},null);
+            builder.sslSocketFactory(context.getSocketFactory(),trust);
+        }
+        okhttp3.OkHttpClient client=builder.build();
+        try(okhttp3.Response response=client.newCall(new okhttp3.Request.Builder()
+                .url((tls?"https":"http")+"://127.0.0.1:"+port+"/synthetic/"+token).build()).execute()) {
+            if(response.code()!=200 || response.body()==null)throw new IOException("status_mismatch");
+            String body=response.body().string();if(!body.equals(token))throw new IOException("body_mismatch");return body;
+        } finally {client.connectionPool().evictAll();client.dispatcher().executorService().shutdown();}
     }
     private static byte[] exact(InputStream in,int n) throws IOException {
         byte[] data=new byte[n];int at=0;while(at<n){int count=in.read(data,at,n-at);if(count<0)throw new EOFException();at+=count;}return data;
@@ -99,6 +120,8 @@ public class MainActivity extends Activity {
         JSONObject report=new JSONObject();
         try {
             report.put("protocol",protocol);report.put("token",token);report.put("started_ms",System.currentTimeMillis());
+            if(protocol.startsWith("okhttp-")){report.put("echo",okhttp(protocol.equals("okhttp-https"),port,token));report.put("status","succeeded");}
+            else {
             boolean ws=protocol.startsWith("ws"),tls=protocol.equals("https")||protocol.equals("wss");
             try(Socket socket=connect(tls,port)) {
                 InputStream in=socket.getInputStream();OutputStream out=socket.getOutputStream();
@@ -120,11 +143,12 @@ public class MainActivity extends Activity {
                 }
                 report.put("status","succeeded");
             }
+            }
         } catch(Exception e) { try {report.put("status","failed");report.put("error",e.getClass().getSimpleName());}catch(Exception ignored){} }
         try {
             report.put("finished_ms",System.currentTimeMillis());
             try(FileOutputStream file=openFileOutput("receipt.json",MODE_PRIVATE)){file.write(report.toString().getBytes(StandardCharsets.UTF_8));}
         } catch(Exception e) {runOnUiThread(()->status.setText("Receipt write failed"));return;}
-        runOnUiThread(()->{if(interactive){status.setText(report.optString("status").equals("succeeded")?"sent:"+count:"failed:"+count);nativeButton.setEnabled(true);webButton.setEnabled(true);}else status.setText("P2 DISPOSABLE NETWORK QA\n"+report.toString());});
+        runOnUiThread(()->{if(interactive){status.setText(report.optString("status").equals("succeeded")?"sent:"+count:"failed:"+count);nativeButton.setEnabled(true);webButton.setEnabled(webEnabled);}else status.setText("P2 DISPOSABLE NETWORK QA\n"+report.toString());});
     }
 }

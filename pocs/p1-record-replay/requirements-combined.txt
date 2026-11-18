@@ -1,0 +1,2 @@
+-r requirements-mirror.txt
+-r ../p2-proxy-relay/requirements.txt

@@ -18,8 +18,8 @@ async def main(args):
         return out
     assert (await adb('shell','pm','path',PACKAGE)).startswith(b'package:'),'Install the dedicated QA APK first'
     results=[]
-    for protocol in ('http','https','ws','wss'):
-        tls=protocol in ('https','wss');ws=protocol in ('ws','wss');tasks=set();received=[]
+    for protocol in ('http','https','ws','wss','okhttp-http','okhttp-https'):
+        tls=protocol in ('https','wss','okhttp-https');ws=protocol in ('ws','wss');tasks=set();received=[]
         if args.untrusted_listener and not tls:continue
         listener_pki=args.untrusted_listener or args.pki
         context=None

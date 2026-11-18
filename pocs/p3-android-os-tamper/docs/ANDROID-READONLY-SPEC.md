@@ -1,0 +1,11 @@
+# P3 Android read-only observation extension
+
+This new entry point supplements, and does not change, CHK-07.synthetic.v1. The user's next-stage request authorizes actual Android environment observation; it does not authorize rooting, bootloader changes, security-policy changes, app data changes, or a financial-app service test.
+
+`python -m android_probe --adb PATH --device SELECTED_DEVICE --output NEW_PRIVATE_DIR` will collect only an explicit allowlist: adb get-state, Android SDK/release/security-patch/build-type/build-tags/debuggable/secure/verifiedbootstate/flash.locked/vbmeta.device_state properties, shell id and getenforce. No arbitrary commands, package inventory, identifiers, screenshots, certificates, network/proxy mutation, app launch, or Appium sessions. Reuse P1's cross-process lease and respect existing quarantine; never auto-clear it. P1 must have stopped before collection.
+
+Each command has a five-second bound and a 4 KiB retained output limit. Write structured source/UTC/duration/status observations, output hashes, and a distinct `android.readonly.v1` result with `synthetic=false`. Errors preserve partial observations. A missing, unauthorized, or disconnected device produces not_run/failed, never a security pass. Output must be new; no overwrite. Raw ADB errors are excluded because they can contain device identifiers. User-selected device ID is used only for transport and lease, not written to the report.
+
+Always emit CHK-07 verdict=inconclusive with explicit missing stock/tampered attestation, protected-service oracle, and causal block reason. Properties are self-reported environment hints and can be spoofed; secure boot indicators are not a tamper attestation. Shell UID is not application UID. SELinux enforcing is not proof of app protection. No inference from app exit alone.
+
+Validation: injected successful/empty/error/timeout/disconnected observations, no mutation command path, output reuse rejection, lease rejection; real-device run only when the authorized A34 is connected and prior P1 cleanup is verified. Physical device disconnection currently blocks that gate. This spec is committed before implementation; synthetic engine/manifest/skills remain unchanged.

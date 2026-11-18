@@ -57,3 +57,7 @@ Not accepted: ordinary third-party application interception, mixed-app attributi
 ## Integrated GUI follow-up
 
 The dedicated app now also exposes native and WebView HTTP buttons for [P1/P2 combined GUI recording](../../p1-record-replay/docs/COMBINED-RECORDING.md). The new WebView cleartext exception is scoped to this app's loopback domain. The existing noninteractive HTTP/HTTPS/WS/WSS device cases were rerun successfully after the APK update. Combined-GUI TLS and OkHttp are still unverified.
+
+## OkHttp and integrated replay follow-up
+
+The pinned OkHttp 4.12.0 (Apache-2.0) loopback fixture passed HTTP and HTTPS on the real Android device: 3 captured transactions each, pre/post delivery excluded. HTTPS rejected an unrelated CA with SSLHandshakeException and zero stored/upstream requests. The full six-protocol matrix passed; no global CA or proxy was changed. This is cooperative QA token correlation, not OS-enforced attribution or support for arbitrary apps. See [combined GUI results](../../p1-record-replay/docs/COMBINED-RECORDING.md) for actual HTTPS GUI record/replay success and the WSS GUI disconnection that remains unaccepted.

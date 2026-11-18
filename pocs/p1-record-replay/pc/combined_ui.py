@@ -1,15 +1,23 @@
 """QA-only integrated GUI. P2 runs independently on an owned asyncio loop."""
-import argparse,asyncio,pathlib,sys,threading,uuid,re,subprocess,tkinter as tk
+import argparse,asyncio,pathlib,sys,threading,uuid,re,ssl,hashlib,base64,subprocess,tkinter as tk
 from tkinter import messagebox,ttk
 from .mirror import MirrorWindow
 from .combined import CombinedRun
 
 class Network:
-    def __init__(self,output):
+    def __init__(self,output,pki=None,websocket=False):
         sys.path.insert(0,str(pathlib.Path(__file__).resolve().parents[2]/'p2-proxy-relay'))
         from relay import Config,Relay
         self.loop=asyncio.new_event_loop();self.thread=threading.Thread(target=self.loop.run_forever,daemon=True);self.thread.start()
         self.tasks=set()
+        context=None
+        if pki:
+            pki=pathlib.Path(pki)
+            context=ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER);context.minimum_version=ssl.TLSVersion.TLSv1_2
+            context.load_cert_chain(pki/'server.pem',pki/'server.key')
+        if websocket:
+            from websocket_relay import read_frame
+            from websockets.frames import Frame,OP_CLOSE
         async def setup():
             async def echo(reader,writer):
                 task=asyncio.current_task();self.tasks.add(task)
@@ -20,6 +28,17 @@ class Network:
                         writer.write(b'HTTP/1.1 204 No Content\r\nContent-Length: 0\r\nConnection: close\r\n\r\n');await writer.drain();return
                     token=path.split(b'/')[-1]
                     if not re.fullmatch(rb'qa-[a-z0-9-]{1,60}',token):raise ValueError('Fixture token required')
+                    if websocket:
+                        headers=dict(line.split(b':',1) for line in head.split(b'\r\n')[1:] if b':' in line)
+                        key=next((v.strip() for k,v in headers.items() if k.lower()==b'sec-websocket-key'),b'')
+                        if len(base64.b64decode(key,validate=True))!=16:raise ValueError('Invalid fixture handshake')
+                        accept=base64.b64encode(hashlib.sha1(key+b'258EAFA5-E914-47DA-95CA-C5AB0DC85B11').digest())
+                        writer.write(b'HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\nSec-WebSocket-Accept: '+accept+b'\r\n\r\n');await writer.drain()
+                        while True:
+                            frame,raw=await read_frame(reader,masked=True,maximum=125,idle_timeout=5,io_timeout=3)
+                            writer.write(Frame(frame.opcode,frame.data,fin=frame.fin).serialize(mask=False));await writer.drain()
+                            if frame.opcode==OP_CLOSE:break
+                        return
                     writer.write(b'HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\nAccess-Control-Allow-Origin: *\r\nConnection: close\r\nContent-Length: '+str(len(token)).encode()+b'\r\n\r\n'+token);await writer.drain()
                 except (OSError,ValueError,TimeoutError,asyncio.IncompleteReadError):pass
                 finally:
@@ -27,9 +46,11 @@ class Network:
                     try:await writer.wait_closed()
                     except OSError:pass
                     self.tasks.discard(task)
-            self.server=await asyncio.start_server(echo,'127.0.0.1',0)
+            self.server=await asyncio.start_server(echo,'127.0.0.1',0,ssl=context)
             self.db=pathlib.Path(output)/('network-'+uuid.uuid4().hex+'.sqlite3')
-            self.relay=Relay(Config(db=self.db,upstream_port=self.server.sockets[0].getsockname()[1]))
+            self.relay=Relay(Config(db=self.db,upstream_port=self.server.sockets[0].getsockname()[1],enable_websocket=websocket,
+                listener_cert=pki/'server.pem' if pki else None,listener_key=pki/'server.key' if pki else None,
+                upstream_tls=bool(pki),upstream_ca=pki/'assets/qa-ca.pem' if pki else None))
             await self.relay.start()
             return await self.relay.command(dict(schema_version=1,command_id=uuid.uuid4().hex,command='ON'))
         result=asyncio.run_coroutine_threadsafe(setup(),self.loop).result(15)
@@ -52,7 +73,7 @@ class CombinedWindow(MirrorWindow):
         self.network=network;self.sync=None;self.abort_pending=False
         super().__init__(root,args)
         self.sync=CombinedRun(self.engine,network,args.output)
-        self.engine.start=self.sync.start;self.engine.finish=self.sync.finish
+        self.engine.start=self.sync.start;self.engine.finish=self.sync.finish;self.engine.replay=self.sync.replay
         root.title('Finsec P1 + P2 - COMBINED QA RECORDING')
         self.postid.set('dev.finsec.qa.network:id/state');self.posttext.set('ready')
         self.sync_status=tk.StringVar();ttk.Label(self.post_selector.master,textvariable=self.sync_status,wraplength=300).pack()
@@ -72,7 +93,7 @@ class CombinedWindow(MirrorWindow):
     def text_input(self):
         if self.sync.state!='active':self.status.set('Both recorders must acknowledge start');return
         super().text_input()
-    def replay(self):self.status.set('Combined replay is not implemented; use standalone P1 replay explicitly')
+    def replay(self):super().replay()
     def abort(self,reason):
         super().abort(reason)
         if self.sync and self.sync.state not in ('idle','completed','partial') and not self.abort_pending:
@@ -96,15 +117,18 @@ def main():
     parser=argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--device',required=True);parser.add_argument('--adb',default='adb');parser.add_argument('--server-jar',required=True)
     parser.add_argument('--server',default='http://127.0.0.1:4723');parser.add_argument('--output',default='outputs')
+    parser.add_argument('--protocol',choices=('http','https','ws','wss','okhttp-http','okhttp-https'),default='http')
+    parser.add_argument('--pki',type=pathlib.Path,help='Private matching QA PKI; required for TLS')
     args=parser.parse_args();args.package='dev.finsec.qa.network';args.allow_coordinates=True;args.session_create_timeout=90
+    if args.protocol in ('https','wss','okhttp-https') and not args.pki:parser.error('TLS requires private matching --pki')
     pathlib.Path(args.output).mkdir(parents=True,exist_ok=True)
     root=tk.Tk()
-    if not messagebox.askyesno('Combined QA fixture','Start whole-device video and the disposable QA HTTP loopback fixture? Input requires an approved Appium session. No global proxy or CA is changed.',parent=root):root.destroy();return
-    network=Network(args.output);window=CombinedWindow(root,args,network)
+    if not messagebox.askyesno('Combined QA fixture','Start whole-device video and the disposable QA loopback fixture? Input requires an approved Appium session. No global proxy or CA is changed.',parent=root):root.destroy();return
+    network=Network(args.output,args.pki if args.protocol in ('https','wss','okhttp-https') else None,args.protocol in ('ws','wss'));window=CombinedWindow(root,args,network)
     reverse=subprocess.check_output([args.adb,'-s',args.device,'reverse','tcp:0','tcp:'+str(network.port)],text=True).strip()
     if not reverse.isdigit():raise RuntimeError('No owned reverse port')
     window.reverse=reverse
-    subprocess.run([args.adb,'-s',args.device,'shell','am','start','-S','-n',args.package+'/.MainActivity','--es','protocol','http','--ei','port',reverse,'--es','token','qa-'+uuid.uuid4().hex[:12],'--ez','interactive','true'],check=True,capture_output=True,timeout=15)
+    subprocess.run([args.adb,'-s',args.device,'shell','am','start','-S','-n',args.package+'/.MainActivity','--es','protocol',args.protocol,'--ei','port',reverse,'--es','token','qa-'+uuid.uuid4().hex[:12],'--ez','interactive','true'],check=True,capture_output=True,timeout=15)
     root.mainloop()
 
 if __name__=='__main__':main()
