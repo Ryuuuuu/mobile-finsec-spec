@@ -50,3 +50,48 @@ class APIQueueTests(unittest.TestCase):
             def backend(config,routes,cancel,emit):
                 self.assertTrue(cancel.wait(3));return dict(execution_status='interrupted',cleanup_verified=True,items=[])
             api=QueueAPI(self.config(root),backend);self.submit(api);api.close();self.assertFalse(api.thread.is_alive())
+
+    def capture_fixture(self,config,folder,cancel,emit):
+        path=folder/'route.json';path.write_text(Path(config['routes'][0]['path']).read_text())
+        route=json.loads(path.read_text())
+        (folder/'combined-link.json').write_text(json.dumps(dict(status='completed',input_recording_id=route['recording_id'],network_stop={'network_coverage':'complete_for_supported_scope'})))
+        return dict(execution_status='completed',cleanup_verified=True,items=[],saved_recording=dict(ref='capture-'+'a'*32,name='Synthetic saved route',recorded_at='2026-11-19T00:00:00Z',path=str(path)))
+
+    def test_capture_publication_restart_and_selected_replay(self):
+        with tempfile.TemporaryDirectory() as root:
+            config=self.config(root);backend=Mock(return_value=dict(execution_status='completed',cleanup_verified=True,items=[]))
+            api=QueueAPI(config,backend,self.capture_fixture)
+            request={'request':{'command_id':'capture-one'}}
+            first=api.operation('capture',request)['data'];api.thread.join(3)
+            self.assertEqual(api.operation('capture',request)['data']['status'],'duplicate')
+            self.assertEqual(len(api.operation('recordings',{})['recordings']),2)
+            again=QueueAPI(config,backend,self.capture_fixture)
+            self.assertEqual(len(again.catalog),2)
+            self.assertEqual(again.operation('capture',request)['data']['status'],'recovery_required')
+            self.submit(again,'replay-new',['capture-'+'a'*32,'qa']);again.thread.join(3)
+            self.assertEqual(len(backend.call_args.args[1]),2)
+
+    def test_capture_incomplete_cleanup_and_wrong_link_never_publish(self):
+        for defect in ('cleanup','link','outside'):
+            with self.subTest(defect=defect),tempfile.TemporaryDirectory() as root:
+                config=self.config(root)
+                def capture(config,folder,cancel,emit):
+                    result=self.capture_fixture(config,folder,cancel,emit)
+                    if defect=='cleanup':result['cleanup_verified']=False
+                    if defect=='link':(folder/'combined-link.json').write_text('{}')
+                    if defect=='outside':result['saved_recording']['path']=config['routes'][0]['path']
+                    return result
+                api=QueueAPI(config,Mock(),capture);api.operation('capture',{'request':{'command_id':'bad'}});api.thread.join(3)
+                self.assertEqual(len(api.catalog),1)
+                self.assertFalse(list((api.root/'saved-recordings').glob('*.json')))
+                self.assertEqual(self.submit(api,'next')['status'],'busy')
+
+    def test_capture_and_replay_share_exclusion_and_cancel(self):
+        with tempfile.TemporaryDirectory() as root:
+            began=threading.Event()
+            def capture(config,folder,cancel,emit):
+                began.set();self.assertTrue(cancel.wait(3));return dict(execution_status='interrupted',cleanup_verified=True,items=[])
+            api=QueueAPI(self.config(root),Mock(),capture)
+            api.operation('capture',{'request':{'command_id':'one'}});self.assertTrue(began.wait(1))
+            self.assertEqual(self.submit(api,'replay')['status'],'busy');api.close()
+            self.assertIsNone(api.current);self.assertEqual(len(api.catalog),1)

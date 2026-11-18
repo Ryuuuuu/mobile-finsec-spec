@@ -11,9 +11,9 @@ from .core import atomic
 from . import protocol
 
 class QueueAPI:
-    def __init__(self, config, backend):
+    def __init__(self, config, backend, capture_backend=None):
         self.root = pathlib.Path(config['output']); self.root.mkdir(parents=True, exist_ok=True)
-        self.backend = backend; self.config = config; self.lock = threading.RLock()
+        self.backend = backend; self.capture_backend=capture_backend; self.config = config; self.lock = threading.RLock()
         self.jobs = {}; self.commands = {}; self.thread = None; self.current = None
         self.catalog = {}
         for entry in config['routes']:
@@ -24,6 +24,8 @@ class QueueAPI:
             route = protocol.load(path)
             if route['package_id'] != 'dev.finsec.qa.network': raise ValueError('Disposable network QA only')
             self.catalog[ref] = dict(entry, route=route)
+        for path in (self.root/'saved-recordings').glob('*.json'):
+            self.load_saved(json.loads(path.read_text(encoding='utf-8')))
         # A previous admission is never auto-resubmitted after restart.
         for path in self.root.glob('api-*/admission.json'):
             admission = json.loads(path.read_text(encoding='utf-8'))
@@ -35,6 +37,18 @@ class QueueAPI:
         with self.lock:
             job['events'].append(dict(seq=len(job['events'])+1, type=kind))
 
+    def load_saved(self, entry):
+        ref=entry['ref'];path=pathlib.Path(entry['path']).resolve()
+        if not re.fullmatch(r'capture-[a-f0-9]{32}',ref) or not path.is_relative_to(self.root.resolve()):raise ValueError('Invalid saved route scope')
+        if path.stat().st_size>1024*1024:raise ValueError('Saved route size limit')
+        route=protocol.load(path)
+        link=json.loads((path.parent/'combined-link.json').read_text(encoding='utf-8'))
+        if route['package_id']!='dev.finsec.qa.network' or route['status']!='completed' or not route['actions']:raise ValueError('Incomplete capture')
+        if link.get('status')!='completed' or link.get('input_recording_id')!=route['recording_id'] or link.get('network_stop',{}).get('network_coverage')!='complete_for_supported_scope':raise ValueError('Incomplete capture linkage')
+        value=dict(entry,route=route)
+        if ref in self.catalog and self.catalog[ref]!=value:raise ValueError('Saved reference conflict')
+        self.catalog[ref]=value
+
     def operation(self, op, args):
         with self.lock:
             if op == 'recordings':
@@ -42,17 +56,18 @@ class QueueAPI:
                     display_name=e['name'], recorded_at=e['recorded_at'],
                     recording=dict(recording_id=e['route']['recording_id'], route_status='complete', packet_status='source_not_loaded'))
                     for ref,e in self.catalog.items()])
-            if op == 'submit':
-                request = args['request']; command = request['command_id']; refs = request['recording_refs']
-                if not re.fullmatch(r'[A-Za-z0-9-]{1,100}', command) or not isinstance(refs,list) or not 1<=len(refs)<=100 or any(r not in self.catalog for r in refs): raise ValueError('Invalid selection')
-                digest = hashlib.sha256(json.dumps(refs).encode()).hexdigest()
+            if op in ('submit','capture'):
+                request = args['request']; command = request['command_id']; refs = request.get('recording_refs',[]) if op=='capture' else request['recording_refs']
+                if op=='capture' and (self.capture_backend is None or refs):raise ValueError('Capture unavailable or invalid')
+                if not re.fullmatch(r'[A-Za-z0-9-]{1,100}', command) or not isinstance(refs,list) or (op=='submit' and not 1<=len(refs)<=100) or any(r not in self.catalog for r in refs): raise ValueError('Invalid selection')
+                digest = hashlib.sha256(json.dumps(refs if op=='submit' else {'operation':'capture'}).encode()).hexdigest()
                 if command in self.commands:
                     old, key = self.commands[command]
                     return dict(data=dict(status='conflict' if old!=digest else 'duplicate' if key in self.jobs else 'recovery_required', execution_id=key))
                 if self.current is not None: return dict(data=dict(status='busy'))
                 key = 'api-'+uuid.uuid4().hex; folder=self.root/key; folder.mkdir()
                 atomic(folder/'admission.json', dict(command_id=command,digest=digest,recording_refs=refs))
-                job=dict(id=key,status='in_progress',events=[],cancel=threading.Event(),result=None)
+                job=dict(id=key,status='in_progress',events=[],cancel=threading.Event(),result=None,operation=op)
                 self.jobs[key]=job; self.commands[command]=(digest,key); self.current=key
                 routes=[copy.deepcopy(self.catalog[r]['route']) for r in refs]
                 self.thread=threading.Thread(target=self.work,args=(job,routes,folder),daemon=False);self.thread.start()
@@ -81,8 +96,19 @@ class QueueAPI:
         started=datetime.datetime.now(datetime.timezone.utc).isoformat()
         try:
             self.emit(job,'qa_preparing')
-            result=self.backend(self.config,routes,job['cancel'],lambda kind:self.emit(job,kind))
+            emit=lambda kind:self.emit(job,kind)
+            result=(self.capture_backend(self.config,folder,job['cancel'],emit) if job['operation']=='capture'
+                    else self.backend(self.config,routes,job['cancel'],emit))
             result['started_at']=started
+            if job['operation']=='capture' and result.get('execution_status')=='completed':
+                if result.get('cleanup_verified') is not True:raise ValueError('Unconfirmed capture cleanup')
+                entry=result['saved_recording']
+                with self.lock:
+                    # Validate before publication; durable catalog precedes availability.
+                    self.load_saved(entry);self.catalog.pop(entry['ref'])
+                    saved=self.root/'saved-recordings';saved.mkdir(exist_ok=True)
+                    atomic(saved/(entry['ref']+'.json'),entry)
+                    self.load_saved(entry)
             atomic(folder/'native-result.json',result)
             self.emit(job,'qa_finalized_after_cleanup_attempt')
             with self.lock:

@@ -98,10 +98,27 @@ def execute(config,routes,cancel,emit):
                 execution_status='completed' if cleanup and result and result['status']=='succeeded' else 'interrupted',
                 completion=dict(selected=len(routes),completed=sum(i['execution_status']=='succeeded' for i in items)),items=items)
 
+def capture(config,folder,cancel,emit):
+    import time
+    output=folder/'capture';output.mkdir()
+    private_config=folder/'capture-config.json';atomic(private_config,config)
+    if cancel.is_set():return dict(execution_status='interrupted',cleanup_verified=True,items=[],completion={})
+    with (folder/'capture-stderr.log').open('w',encoding='utf-8') as errors:
+        child=subprocess.Popen([sys.executable,'-m','pc.qa_capture','--config',str(private_config),'--output',str(output)],
+            cwd=Path(__file__).resolve().parent.parent,stdin=subprocess.DEVNULL,stdout=subprocess.DEVNULL,stderr=errors)
+        emit('capture_window_opening')
+        while child.poll() is None:
+            if cancel.is_set() and not (output/'cancel').exists():
+                (output/'cancel').write_text('cancel');emit('capture_cancel_requested')
+            time.sleep(.1)
+        path=output/'capture-result.json'
+        if child.returncode!=0 or not path.exists():raise RuntimeError('Capture exit requires reconciliation')
+        emit('capture_window_closed');return json.loads(path.read_text(encoding='utf-8'))
+
 def main():
     parser=argparse.ArgumentParser();parser.add_argument('--config',type=Path,required=True);args=parser.parse_args()
     if args.config.stat().st_size>65536:raise ValueError('Configuration limit')
     config=json.loads(args.config.read_text(encoding='utf-8'))
-    api=QueueAPI(config,execute);serve(api,sys.stdin,sys.stdout)
+    api=QueueAPI(config,execute,capture);serve(api,sys.stdin,sys.stdout)
 
 if __name__=='__main__':main()

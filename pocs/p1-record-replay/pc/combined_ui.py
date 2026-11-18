@@ -161,7 +161,7 @@ class CombinedWindow(MirrorWindow):
     def __init__(self,root,args,network):
         self.network=network;self.sync=None;self.abort_pending=False
         from device_resources import Reservation
-        self.reservation=Reservation(args.device)
+        self.reservation=getattr(args,'reservation',None) or Reservation(args.device)
         try:self.reservation.acquire()
         except Exception:network.close();raise
         args.device_lease=self.reservation
