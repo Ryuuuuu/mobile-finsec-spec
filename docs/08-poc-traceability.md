@@ -146,3 +146,7 @@ S2 1.1은 UTF-16LE/BE 고정 샘플 표현 및 결과 이름 해시화를 추가
 ### P3 실기기 비교 재개 준비 (2026-11-18)
 
 [비교·오류·재개 명세](../pocs/p3-android-os-tamper/docs/DEVICE-COMPARISON-RESUME.md)와 순수 준비 gate를 추가했습니다. 전체 85시험 중 84통과/기존 권한 관련 1skip. 정상·변조 상태 근거 및 같은 보호 서비스 oracle을 fixture로 검증했으며 실기기 비교는 미실행입니다. 준비 gate는 자동 실행/보안 판정을 하지 않습니다.
+
+### P4 local HTTP preparation (2026-11-18)
+
+[Ollama loopback adapter](../pocs/p4-integration/docs/OLLAMA-LOCAL-PREPARATION.md): 6 local mock HTTP tests passed; full P4 142 tests / 141 passed / 1 existing privilege skip. Real model and Supervisor admission are not verified/enabled. Cancellation after submission remains unknown with no automatic retry; durable recovery integration remains pending.

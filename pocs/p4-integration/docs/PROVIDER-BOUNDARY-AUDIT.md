@@ -48,3 +48,7 @@ No retry/backoff was added: ambiguous admission, unconfirmed cancellation, survi
 The watchdog also checks failed streams before progressing, so an observed stream exception stops subsequent tool execution instead of waiting until final cleanup. The private-sentinel test asserts zero tool starts and no raw exception text in persisted events.
 
 Final follow-up regression on Windows Python 3.12.10: **136 tests run, 135 passed, 1 Windows symlink-privilege skip**. All three new isolation-boundary simulations and the revised unconfirmed-cancel regression passed. No real provider cancellation was tested.
+
+## Local HTTP preparation follow-up
+
+See [Ollama transport preparation](OLLAMA-LOCAL-PREPARATION.md). This independent adapter does not alter fake provider admission. Local mock HTTP success is not real model compatibility; unconfirmed remote cancellation and durable ownership integration remain blockers for Supervisor admission.

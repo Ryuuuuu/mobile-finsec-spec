@@ -145,3 +145,5 @@ Use a dedicated venv and the same requirements, then from this directory:
 Providers remain fake-a/fake-b; no model API key, ADB, or device security change is required.
 
 Provider implementation and retry/logging limits are reviewed in the [provider boundary audit](docs/PROVIDER-BOUNDARY-AUDIT.md). Both fake names share one implementation; real model compatibility remains unverified.
+
+A separate [Ollama loopback HTTP preparation adapter](docs/OLLAMA-LOCAL-PREPARATION.md) is tested against a local mock server. It is not admitted to Supervisor and does not claim real model execution or remote cancellation.
