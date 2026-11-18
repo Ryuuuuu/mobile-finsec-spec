@@ -67,3 +67,23 @@ for real traffic and is not public test evidence. No device/model/inspection
 skill/installation is involved.
 
 Frame-context follow-up validation: structure-only suite 151/151 PASS, zero skips (29.703s), existing P2 venv.
+
+## Abnormal WebSocket ending through P4
+
+The existing normal binary-fragment test now shares its setup with two additional
+real loopback paths: EOF after a non-final binary fragment, and a valid Close
+handshake before the final continuation. The former records websocket_abrupt_eof;
+the latter records websocket_fragment_interrupted. Both retain an abnormal,
+incomplete close event, original readable frame bytes and message_finished=false
+through P4. Packet/link state stays partial while the independently acknowledged
+input route is complete. A valid Close handshake alone is therefore not promoted
+to a completed fragmented message.
+
+The three ending comparisons passed (1.122s). No new production defect was
+reproduced and no runtime behavior changed. These are direct TCP/WS EOF and Close
+cases, not USB loss, abrupt OS process death, TLS close-notify variations or every
+possible simultaneous-close ordering. Frame completeness still means the stored
+frame bytes were delivered; no missing continuation is fabricated or reassembled.
+Only synthetic data, fake device input and opaque mock execution are involved.
+
+Ending follow-up validation: structure-only suite 153/153 PASS, zero skips (30.007s), existing P2 venv.

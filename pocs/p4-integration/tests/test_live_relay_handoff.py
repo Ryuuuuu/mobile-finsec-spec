@@ -405,7 +405,7 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.handoff())['packet_status'],'complete')
         self.assertEqual(self.stop_calls,1)
 
-    async def test_binary_fragment_metadata_and_close_survive_p4_projection(self):
+    async def binary_fragment_handoff(self,ending):
         from websockets.frames import Frame,OP_BINARY,OP_CONT,OP_CLOSE
         ws=load('p4_binary_ws_fixture',BASE/'p2-proxy-relay/tests/test_websocket.py')
         upstream=ws.WebSocketUpstream();await upstream.start();self.addAsyncCleanup(upstream.close)
@@ -420,33 +420,55 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         try:
             writer.write(ws.REQUEST[:-2]+b'X-QA: QA HANDOFF\r\n\r\n');await writer.drain()
             await asyncio.wait_for(reader.readuntil(b'\r\n\r\n'),3)
-            for frame in (Frame(OP_BINARY,b'\x00\xfffirst',fin=False),Frame(OP_CONT,b'\x80last'),Frame(OP_CLOSE,b'\x03\xe8')):
+            sent=[Frame(OP_BINARY,b'\x00\xfffirst',fin=False)]
+            if ending=='complete':sent.append(Frame(OP_CONT,b'\x80last'))
+            if ending!='abrupt':sent.append(Frame(OP_CLOSE,b'\x03\xe8'))
+            for frame in sent:
                 raw=frame.serialize(mask=True);originals.append(raw)
                 for part in (raw[:1],raw[1:5],raw[5:]):
                     writer.write(part);await writer.drain();await asyncio.sleep(0)
                 echoed,_=await ws.get_frame(reader)
                 self.assertEqual((echoed.opcode,echoed.fin,echoed.data),(frame.opcode,frame.fin,frame.data))
-            await asyncio.wait_for(reader.read(),3)
+            if ending!='abrupt':await asyncio.wait_for(reader.read(),3)
         finally:writer.close();await writer.wait_closed()
         if self.relay.tasks:await asyncio.wait_for(asyncio.gather(*list(self.relay.tasks)),3)
         await asyncio.to_thread(self.combined.finish);await self.relay.close()
         self.files=dict(link=self.engine.j.path/'combined-link.json',route=self.engine.j.path/'route.json',packets=self.db)
-        summary,data=self.read_files(self.files);self.assertEqual(summary['packet_status'],'complete')
+        summary,data=self.read_files(self.files);expected='complete' if ending=='complete' else 'partial'
+        self.assertEqual(summary['packet_status'],expected)
         frames=[packet for packet in data['packets'] if packet['kind']=='websocket_frame' and packet.get('direction')=='client_to_upstream']
-        self.assertEqual(len(frames),3)
-        first,last=frames[:2]
-        self.assertEqual(first['connection_id'],last['connection_id'])
-        self.assertEqual(first['websocket']['message_id'],last['websocket']['message_id'])
-        self.assertEqual([p['websocket']['fragment_index'] for p in frames[:2]],[0,1])
-        self.assertEqual([p['websocket']['message_finished'] for p in frames[:2]],[False,True])
+        self.assertEqual(len(frames),len(sent))
+        if ending=='complete':
+            first,last=frames[:2]
+            self.assertEqual(first['connection_id'],last['connection_id'])
+            self.assertEqual(first['websocket']['message_id'],last['websocket']['message_id'])
+            self.assertEqual([p['websocket']['fragment_index'] for p in frames[:2]],[0,1])
+            self.assertEqual([p['websocket']['message_finished'] for p in frames[:2]],[False,True])
+        else:
+            self.assertFalse(frames[0]['websocket']['message_finished'])
+            self.assertEqual(summary['link_status'],'partial')
+            self.assertEqual(summary['route_status'],'complete')
         self.assertTrue(all(not p['message_context_before_recording'] for p in frames))
         closed=[p for p in data['packets'] if p['kind']=='websocket_close']
-        self.assertEqual(closed[0]['websocket']['lifecycle'],'closed')
+        self.assertEqual(len(closed),1)
+        self.assertEqual(closed[0]['websocket']['lifecycle'],'closed' if ending=='complete' else 'abnormal')
+        self.assertEqual(closed[0]['incomplete'],ending!='complete')
+        error={'complete':None,'abrupt':'websocket_abrupt_eof','interrupted_close':'websocket_fragment_interrupted'}[ending]
+        self.assertEqual(closed[0]['error'],error)
         grant=PacketGrant(self.db,summary['recording_id'],data['network_recording_id'],summary['source_hashes']['packets'],lambda:None)
         for packet,raw in zip(frames,originals):
             read=grant.read(summary['recording_id'],packet['packet_id'],'request')
             self.assertTrue(read['complete']);self.assertEqual(base64.b64decode(read['data']),raw)
-        self.assertEqual((await self.handoff())['packet_status'],'complete')
+        self.assertEqual((await self.handoff())['packet_status'],expected)
+
+    async def test_binary_fragment_metadata_and_close_survive_p4_projection(self):
+        await self.binary_fragment_handoff('complete')
+
+    async def test_binary_fragment_abrupt_eof_survives_partial_handoff(self):
+        await self.binary_fragment_handoff('abrupt')
+
+    async def test_close_before_final_fragment_is_not_complete_message(self):
+        await self.binary_fragment_handoff('interrupted_close')
 
     async def large_split_http_handoff(self,capture_limit):
         self.relay.config.capture_body_bytes=capture_limit
