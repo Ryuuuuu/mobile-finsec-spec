@@ -103,3 +103,38 @@ These tests inject SQLite exceptions at real persistence methods; they do not ex
 Shutdown/storage follow-up validation: actual-code handoff tests 16/16 PASS (5.856s), P2 relay 40/40 PASS (10.880s), full structural runner 136/136 PASS zero skips (24.637s), Windows/Python 3.12.10.
 Replay cancellation follow-up: actual P1 Engine/CombinedRun and P2 loopback replay now checks cancellation at the network STOP boundary. Input and packets may independently be complete while the combined result remains partial; source recording bytes stay unchanged. See ../../p1-record-replay/docs/COMBINED-RECORDING.md. This does not add replay-result support to the offline P4 route reader, which continues rejecting replay links as unsupported.
 Recording-input follow-up: cancellation, simulated disconnect and action-journal failure after emitting an actual loopback request preserve one accepted action/two packets as partial route + complete packets in P4. Cleanup-journal failure no longer prevents scoped STOP. See ../../p1-record-replay/docs/COMBINED-RECORDING.md for evidence and storage limits.
+
+## HTTPS verification failure and WSS fragment STOP handoff
+
+Two additional offline scenarios now cross the existing P1 Engine/CombinedRun,
+actual P2 relay and P4 artifact/grant paths, using only synthetic QA bytes:
+
+- HTTPS: the client trusts the private listener CA, but the relay's upstream
+  hostname intentionally mismatches the upstream certificate. Verification stays
+  enabled. The upstream receives no application request; the relay reports a TLS
+  error/502, and P1's combined state and P4 packet/link state remain partial.
+- WSS: a verified TLS connection upgrades to WebSocket, then forwards a valid
+  non-final text fragment. STOP occurs after upstream receipt but before the
+  message completes. The existing websocket_incomplete_at_stop gap remains visible
+  through CombinedRun and P4 instead of becoming a complete packet capture.
+
+In both cases the one acknowledged synthetic input action is complete. Its route
+status correctly remains complete while packet and combined-link statuses are
+partial; the mock structural executor finishing is not evidence of full capture.
+The scoped packet grant can still read the captured synthetic request and raw
+packet content does not leak into the public final result. No production defect
+was reproduced, so this change adds tests and documents the observed contract.
+
+Fresh localhost-only PKI is generated in each temporary test directory. No OS
+trust store, device setting, proxy configuration or real app is touched. The
+fixture requires an available OpenSSL CLI or cryptography (already available in
+the P2 venv used here); without either, these two tests explicitly skip. The first
+P4-venv run skipped the HTTPS case; it was rerun with the existing P2 venv and
+actually passed. Do not count dependency skips as TLS/WSS validation. Targeted
+handoff suite: 24/24 PASS, zero skips (8.495s).
+
+These are real loopback TLS/WebSocket and file-contract tests with a fake device
+adapter and opaque mock executor. They do not establish GUI/phone compatibility,
+financial-app support, real model execution or P4 import of replay-result links.
+
+Full structure-only validation: 145/145 PASS, zero skips (27.809s), existing P2 venv.

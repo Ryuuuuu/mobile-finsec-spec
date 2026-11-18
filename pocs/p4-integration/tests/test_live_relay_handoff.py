@@ -405,6 +405,73 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual((await self.handoff())['packet_status'],'complete')
         self.assertEqual(self.stop_calls,1)
 
+    async def test_wss_fragment_at_stop_preserves_partial_handoff(self):
+        from websockets.frames import Frame,OP_TEXT
+        ws=load('p4_handoff_ws_fixture',BASE/'p2-proxy-relay/tests/test_websocket.py')
+        tls_fixture=load('p4_handoff_wss_tls_fixture',BASE/'p2-proxy-relay/tests/tls_fixture.py')
+        pki=tls_fixture.TLSFixture(self.root/'pki');fragment_seen=asyncio.Event()
+        await self.relay.close();self.up.server.close();await self.up.server.wait_closed()
+        async def upstream(reader,writer):
+            task=asyncio.current_task();self.up.tasks.add(task)
+            try:
+                await reader.readuntil(b'\r\n\r\n');writer.write(ws.RESPONSE);await writer.drain()
+                frame,raw=await ws.get_frame(reader,True)
+                self.assertFalse(frame.fin);fragment_seen.set()
+                await reader.read()
+            finally:
+                writer.close();await writer.wait_closed();self.up.tasks.discard(task)
+        self.up.server=await asyncio.start_server(upstream,'127.0.0.1',0,ssl=pki.server_context())
+        self.up.port=self.up.server.sockets[0].getsockname()[1]
+        self.relay=Relay(Config(db=self.db,upstream_port=self.up.port,io_timeout=.5,enable_websocket=True,
+            listener_cert=pki.cert,listener_key=pki.key,upstream_tls=True,upstream_ca=pki.ca))
+        await self.relay.start();self.addAsyncCleanup(self.relay.close)
+        await self.relay.command(dict(schema_version=1,command_id=uuid4().hex,command='ON'))
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        reader,writer=await asyncio.open_connection('127.0.0.1',self.relay.port,
+            ssl=pki.client_context(),server_hostname='localhost')
+        try:
+            writer.write(ws.REQUEST[:-2]+b'X-QA: QA HANDOFF\r\n\r\n');await writer.drain()
+            self.assertIn(b'101 Switching Protocols',await asyncio.wait_for(reader.readuntil(b'\r\n\r\n'),3))
+            writer.write(Frame(OP_TEXT,b'synthetic-fragment',fin=False).serialize(mask=True));await writer.drain()
+            await asyncio.wait_for(fragment_seen.wait(),3)
+            await asyncio.to_thread(self.combined.finish)
+        finally:writer.close();await writer.wait_closed()
+        await self.relay.close()
+        self.files=dict(link=self.engine.j.path/'combined-link.json',route=self.engine.j.path/'route.json',packets=self.db)
+        self.assertEqual(self.combined.state,'partial')
+        self.assertIn('websocket_incomplete_at_stop',[gap['reason'] for gap in self.combined.link['network_stop']['gaps']])
+        summary=await self.handoff()
+        self.assertEqual(summary['packet_status'],'partial');self.assertEqual(summary['route_status'],'complete')
+        self.assertEqual(summary['link_status'],'partial')
+
+    async def test_verified_tls_failure_remains_partial_through_p1_and_p4(self):
+        tls_fixture=load('p4_handoff_tls_fixture',BASE/'p2-proxy-relay/tests/tls_fixture.py')
+        pki=tls_fixture.TLSFixture(self.root/'pki')
+        await self.relay.close();self.up.server.close();await self.up.server.wait_closed()
+        self.up.server=await asyncio.start_server(self.up.handle,'127.0.0.1',0,ssl=pki.server_context())
+        self.up.port=self.up.server.sockets[0].getsockname()[1]
+        self.relay=Relay(Config(db=self.db,upstream_port=self.up.port,io_timeout=.5,
+            listener_cert=pki.cert,listener_key=pki.key,upstream_tls=True,upstream_ca=pki.ca,
+            upstream_server_name='wrong.localhost'))
+        await self.relay.start();self.addAsyncCleanup(self.relay.close)
+        await self.relay.command(dict(schema_version=1,command_id=uuid4().hex,command='ON'))
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        reader,writer=await asyncio.open_connection('127.0.0.1',self.relay.port,
+            ssl=pki.client_context(),server_hostname='localhost')
+        try:
+            writer.write(p2_fixture.request_bytes('/tls-handoff',b'QA HANDOFF'));await writer.drain()
+            self.assertIn(b'502 Bad Gateway',await asyncio.wait_for(reader.read(),3))
+        finally:writer.close();await writer.wait_closed()
+        await asyncio.to_thread(self.combined.finish);await self.relay.close()
+        self.files=dict(link=self.engine.j.path/'combined-link.json',route=self.engine.j.path/'route.json',packets=self.db)
+        self.assertEqual(self.combined.link['network_stop']['counters']['tls_errors'],1)
+        self.assertEqual(self.combined.state,'partial');self.assertEqual(self.up.received,[])
+        summary=await self.handoff()
+        self.assertEqual(summary['packet_status'],'partial');self.assertEqual(summary['route_status'],'complete')
+        self.assertEqual(summary['link_status'],'partial')
+
     async def test_real_short_response_stays_partial(self):
         summary,_=await self.capture('/short-response')
         self.assertEqual(summary['packet_status'],'partial')
