@@ -1,0 +1,2 @@
+-include rename.pro
+-dontobfuscate

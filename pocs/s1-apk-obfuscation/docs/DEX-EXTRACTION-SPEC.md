@@ -15,7 +15,8 @@ an automatic financial-security verdict.
 ## Reproducible authored APK pair
 
 Compile one small, offline Java Activity and ImportantLogic class against android.jar.
-Build plain DEX with D8 and renamed DEX with R8. For this experiment disable shrinking
+Build both DEX variants with the same R8 version; plain additionally sets
+`-dontobfuscate`. D8 is version-probed only in the final controlled comparison. For this experiment disable shrinking
 and optimization, keep the Activity entry point, permit other name obfuscation and
 save R8 mapping. This isolates renaming; it is NOT a production hardening profile.
 aapt packages the same binary manifest for both; append the corresponding DEX.
@@ -49,3 +50,10 @@ class/malformed input failures. Separate unit parser/timeout/output-limit fault 
 from real SDK execution. Keep APKs, mapping, raw smali and hashes private; publish
 only authored source, build/analyzer scripts, tests and sanitized summary. No device,
 model, account, transaction, CA or security setting is used.
+
+
+The initial pilot used D8 for plain and R8 for renamed. Review identified compiler
+version/code-generation differences as a confound, so the acceptance pair now uses
+R8 8.9.27 for BOTH variants with the same javac input and common flags. Only the
+plain variant adds -dontobfuscate. Pilot extraction is not substituted for this
+controlled rerun. No shrinking or optimization is claimed or measured here.

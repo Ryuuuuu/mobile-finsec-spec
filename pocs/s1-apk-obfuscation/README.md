@@ -49,3 +49,30 @@ keep-rule/library/generated-code exclusions; manual review and broader coverage;
 manifest/Skill/catalog registration; real artifact provenance and product integration.
 Real obfuscation policies differ: the two-dimension fixture policy is not a universal
 requirement that every app must rename every identifier or transform all control flow.
+
+## Actual DEX extraction follow-up
+
+The separate `dex_extract` path now invokes the installed official SDK analyzer on
+real APK DEX, saving defined class/member records and selected-class smali privately.
+It ALWAYS remains inconclusive and does not call the synthetic evaluator. See
+[design](docs/DEX-EXTRACTION-SPEC.md) and [actual results](docs/DEX-VALIDATION.md).
+The initial synthetic-only limitations above describe the original path; real
+semantic readability assessment and security classification are still not implemented.
+
+From this directory, with trusted existing SDK/JDK paths (no download by these scripts):
+
+```powershell
+python -m build_qa --jdk C:\Tools\jdk-21 --sdk C:\Android\Sdk --output C:\QA\s1-pair
+python -m dex_extract --apk C:\QA\s1-pair\plain.apk --java C:\Tools\jdk-21\bin\java.exe --tools C:\Android\Sdk\cmdline-tools\19.0 --class dev.finsec.s1.ImportantLogic --output C:\QA\s1-plain
+# Read the authored build's mapping.txt for the renamed ImportantLogic class.
+# The pinned tested build maps it to a.a; do not assume this for arbitrary builds.
+python -m dex_extract --apk C:\QA\s1-pair\renamed.apk --java C:\Tools\jdk-21\bin\java.exe --tools C:\Android\Sdk\cmdline-tools\19.0 --class a.a --output C:\QA\s1-renamed
+python -m compare_qa --pair C:\QA\s1-pair --plain C:\QA\s1-plain --renamed C:\QA\s1-renamed --output C:\QA\s1-comparison.json
+```
+
+The builder requires SDK platform 35, Build Tools 35.0.0, Command-line Tools 19.0
+and JDK 21. It creates unsigned static-analysis APKs, not an installation workflow.
+Every output directory must be new. Raw tool output may contain application logic
+or strings; treat the entire directory as private. Tool time/output errors preserve
+partial evidence with failed/inconclusive status. Exit 0 means extraction completed,
+not that obfuscation protection passed.

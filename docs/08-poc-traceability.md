@@ -93,7 +93,7 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 |CHK-12|HTS 구동시 실행 파라미터 재사용 방지|N|모바일 MVP 제외, 카탈로그 보존|없음|HTS 별도 범위 승인 전 실행 안 함|
 |CHK-13|이용자 입력정보 보호|U|미구현; P1 password 거부는 자체 안전장치|없음|G6 필드별 보호 요구/관찰|
 |CHK-14|프로그램 무결성 검증|E|미구현; APK hash guard는 검사 아님|없음|G4/G5 OS 설치 거부와 앱 방어 구분|
-|CHK-15|소스코드 난독화 적용|S|부분 S1: APK inventory+합성 2차원 판정; 실제 분석 미구현|실제 QA APK 파일 inventory만, 기기/보안 판정 없음|G5 중요 로직·분석 artifact|
+|CHK-15|소스코드 난독화 적용|S|부분 S1: 실제 SDK DEX/smali 추출+합성 판정; 실제 보안 판정 미구현|실제 QA APK 파일 inventory만, 기기/보안 판정 없음|G5 중요 로직·분석 artifact|
 |CHK-16|디버깅 탐지기능 적용|E|미구현|없음|G4 attach 성공과 방어 oracle|
 |CHK-17|보안프로그램 구동시 최신 업데이트 수행|S|미구현; 모바일 확장 provisional|없음|G5 권위 있는 버전·update fixture|
 |CHK-18|접근매체 발급 시 실명확인 수행|M|미구현 수동 검토 흐름|없음|G6/G8 적용 기준·발급 증거|
@@ -127,3 +127,8 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 ### S1 후속 구현 (초기 추적 기준 이후)
 
 [CHK-15 독립 POC](../pocs/s1-apk-obfuscation/README.md)는 P3의 S 확장 실험이며 새 P5가 아니다. 실제 QA APK 두 파일의 구조 관찰은 모두 inconclusive이고, 설치 가능한 DEX가 없는 합성 APK형 ZIP의 증거 계약만 pass/fail/inconclusive 각 3회 시험했다. 19개 테스트 통과. 실제 디컴파일·난독화 판정·manifest/Skill/catalog 통합은 미구현이므로 위의 제품 S 검사 미완료 결론은 유지된다. [검증 기록](../pocs/s1-apk-obfuscation/docs/VALIDATION.md) 참조.
+
+
+### 실제 DEX 추출 후속
+
+[S1 실제 SDK 검증](../pocs/s1-apk-obfuscation/docs/DEX-VALIDATION.md): 동일 R8 8.9.27로 만든 직접 작성 QA APK 2개에서 class/member와 선택 클래스 smali를 실제 추출했다. 이름 변경은 mapping과 일치했고 조건 2개·QA 문자열 3개는 양쪽에서 관찰됐다. 보안 판정은 양쪽 모두 inconclusive다. 28개 회귀 통과와 실제 SDK 추출을 구분하며, 이전 ‘실제 분석 미구현’ 중 DEX 근거 추출 부분만 갱신한다. 의미 분석·실제 앱 보호 판정·서명/Android 실행·제품 통합은 여전히 미검증/미구현이다.
