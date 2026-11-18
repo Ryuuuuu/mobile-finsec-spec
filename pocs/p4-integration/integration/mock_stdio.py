@@ -52,6 +52,7 @@ def create_mock_api(root):
         'platform_skills': ['aos'], 'requires': ['mock_input']}}
     api = StartAPI(StructureSupervisor(root / 'runs', skills), inventory, catalog,
                    recording_registry(root))
+    api.recording_loader=lambda:recording_registry(root)
     return api
 
 

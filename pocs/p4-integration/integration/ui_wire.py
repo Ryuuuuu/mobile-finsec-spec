@@ -32,7 +32,7 @@ class UIWire:
             if type(gen) is not int or not 0 <= gen <= 2**53-1:
                 raise ValueError('GENERATION')
             op, args = msg['operation'], msg['arguments']
-            fields = {'recording': {'ref'}, 'inspect': {'request'}, 'submit': {'request'},
+            fields = {'recordings': set(), 'recording': {'ref'}, 'inspect': {'request'}, 'submit': {'request'},
                       'progress': {'execution_id', 'cursor'}, 'cancel': {'execution_id'},
                       'history': set(), 'result': {'run_id'}}
             if not isinstance(op, str) or op not in fields or not isinstance(args, dict) or set(args) != fields[op]:

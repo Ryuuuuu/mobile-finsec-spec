@@ -7,6 +7,22 @@ class UIBridge:
     def __init__(self,project_id,api):self.project_id=project_id;self.api=api
     def envelope(self,generation,**data):
         return dict(contract='mock-ui.v1',project_id=self.project_id,request_generation=generation,**data)
+    def recordings(self,generation):
+        loader=getattr(self.api,'recording_loader',None)
+        if loader is None:return self.envelope(generation,status='unsupported',recordings=[])
+        try:
+            candidates=loader();rows=[];selectable={}
+            for ref,files in sorted(candidates.items()):
+                summary,_=read_artifacts(files['link'],files['route'],files['packets'])
+                enabled=(summary.get('bundle_status')!='invalid' and
+                         all(summary.get(k) in ('complete','partial') for k in ('link_status','route_status','packet_status')))
+                rows.append(dict(ref=ref,selectable=enabled,reason=None if enabled else 'RECORDING_NOT_READY',recording=summary))
+                if enabled:selectable[ref]=files
+            self.api.recordings=selectable  # Commit scan once; admitted jobs already copied their paths.
+            return self.envelope(generation,status='ok',recordings=rows)
+        except (OSError,ValueError,TypeError):
+            self.api.recordings={}  # Do not admit work from stale discovery after a failed scan.
+            return self.envelope(generation,status='unavailable',recordings=[],reason='RECORDING_REFRESH_FAILED')
     def recording(self,ref,generation):
         files=self.api.recordings.get(ref)
         if files is None:return self.envelope(generation,status='missing')

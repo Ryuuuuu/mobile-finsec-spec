@@ -38,6 +38,34 @@ class RecordingProcessTests(unittest.IsolatedAsyncioTestCase):
         files=publish_bundle(self.files['link'],self.files['route'],self.files['packets'],root)
         return files,files['link'].parent.name
 
+    async def test_refresh_discovers_new_bundle_and_excludes_staging_and_corruption(self):
+        self.set_message(b'QA LATE BUNDLE');c=self.child()
+        self.assertEqual(c.exchange(message('recordings',{}))['recordings'],[])
+        files,ref=self.bundle()
+        (self.root/'recordings'/'.bundle-preparing').mkdir()
+        listing=c.exchange(message('recordings',{}))
+        self.assertEqual(listing['status'],'ok')
+        self.assertEqual([(r['ref'],r['selectable']) for r in listing['recordings']],[(ref,True)])
+        self.run_ref(c,ref)
+        files['packets'].unlink()
+        listing=c.exchange(message('recordings',{}))
+        self.assertEqual(listing['recordings'][0]['selectable'],False)
+        r=request();r.update(command_id='after-refresh',recording_ref=ref)
+        self.assertEqual(c.exchange(message('submit',{'request':r}))['data']['status'],'not_run')
+        self.assertEqual(len(c.exchange(message('history',{}))['runs']),1)
+
+    async def test_refresh_scan_failure_clears_stale_selection_then_recovers(self):
+        self.set_message(b'QA REFRESH');files,ref=self.bundle();c=self.child()
+        self.assertTrue(c.exchange(message('recordings',{}))['recordings'][0]['selectable'])
+        invalid=self.root/'recordings'/'invalid.name';invalid.mkdir()
+        reply=c.exchange(message('recordings',{}))
+        self.assertEqual(reply['status'],'unavailable')
+        r=request();r.update(command_id='stale-refresh',recording_ref=ref)
+        self.assertEqual(c.exchange(message('submit',{'request':r}))['data']['status'],'not_run')
+        invalid.rmdir()
+        self.assertTrue(c.exchange(message('recordings',{}))['recordings'][0]['selectable'])
+        self.run_ref(c,ref)
+
     async def test_published_partial_bundle_through_child_registry(self):
         self.set_message(b'QA BUNDLE PARTIAL');self.record.update(status='interrupted',network_coverage='partial')
         with closing(sqlite3.connect(self.files['packets'],isolation_level=None)) as db:

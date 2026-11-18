@@ -65,3 +65,4 @@ Additional scenarios cover partial collection, registered-but-missing route/data
 This is Python-to-Python IPC over a shared local filesystem, not streaming APK/device data through pipes, actual P1 recording/P2 collection, Rust-Python integration, GPUI rendering, inspection skill execution or a real model test.
 
 Recording handoff follow-up: 108 structural tests passed, zero skips.
+Follow-up: explicit recordings refresh now discovers newly published bundles in a running child; see LIVE-RELAY-HANDOFF.md for selection, failure and bounded synchronous-scan limitations. Startup-only wording above describes the original implementation.
