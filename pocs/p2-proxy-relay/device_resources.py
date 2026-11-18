@@ -30,7 +30,7 @@ class OwnedReverse:
         self.adb=adb;self.device=device;self.host_port=host_port;self.runner=runner;self.port=None;self.uncertain=False
         self.candidates=candidates if candidates is not None else random.SystemRandom().sample(range(40000,60000),20)
     def command(self,*args):
-        return self.runner([self.adb,'-s',self.device,'reverse',*args],capture_output=True,text=True,timeout=10)
+        return self.runner([self.adb,'-s',self.device,'reverse',*args],stdin=subprocess.DEVNULL,capture_output=True,text=True,timeout=10)
     def mappings(self):
         result=self.command('--list')
         if result.returncode:raise ReverseUncertain('Cannot verify reverse mappings')

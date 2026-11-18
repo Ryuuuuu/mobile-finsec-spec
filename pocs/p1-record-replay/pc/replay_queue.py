@@ -31,12 +31,13 @@ class ReplayQueue:
         self.blocked = False
         self.journal = None
         self.prepare = None  # Explicit owner-supplied QA preparation only.
+        self.on_state = None
 
     def cancel(self):
         self.cancelled.set()
         self.combined.engine.stop_requested()
 
-    def run(self, routes):
+    def run(self, routes, *, reset_cancel=True):
         if not self.guard.acquire(blocking=False):
             raise RuntimeError('Replay queue already running')
         original_cancel = self.combined.engine.cancel
@@ -50,7 +51,7 @@ class ReplayQueue:
             routes = copy.deepcopy(routes)
             for route in routes:
                 protocol.route(route)
-            self.cancelled.clear()
+            if reset_cancel:self.cancelled.clear()
             self.combined.engine.cancel = CancellationScope(original_cancel, self.cancelled)
             self.running = True
             self.journal = Journal(self.output, 'replay-queue')
@@ -65,6 +66,7 @@ class ReplayQueue:
                 except OSError:
                     self.blocked = True
                     raise
+                if self.on_state is not None:self.on_state(copy.deepcopy(result))
             save()  # Do not dispatch if the ordered intent cannot be persisted.
             for index, route in enumerate(routes):
                 if self.cancelled.is_set():

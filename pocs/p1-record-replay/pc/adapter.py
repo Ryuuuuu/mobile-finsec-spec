@@ -32,7 +32,7 @@ class Appium:
         if not self.session: raise RuntimeError('No Appium session')
         return self.request(method,'/session/'+self.session+path,data)
     def adb(self,*args,binary=False):
-        result=subprocess.run(['adb','-s',self.device,*args],capture_output=True,timeout=20,check=True)
+        result=subprocess.run(['adb','-s',self.device,*args],stdin=subprocess.DEVNULL,capture_output=True,timeout=20,check=True)
         return result.stdout if binary else result.stdout.decode(errors='strict').strip()
     def target(self):
         if self.adb('get-state')!='device': raise RuntimeError('Selected device not ready')

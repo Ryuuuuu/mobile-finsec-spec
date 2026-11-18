@@ -4,7 +4,7 @@
 
 The user requires selecting several saved routes, ordering them, and replaying 1 -> 2 -> 3 on one device without overlap. Each route retains its own recording/packet identity and result. Selecting only one route is not the intended limit. Repeating a selected sequence creates new execution IDs, not overwritten results.
 
-This native GPUI-kit POC implements the selection and sequential **mock structural execution** portion, using actual Rust-to-Python private pipes. It does not yet dispatch the selected routes through P1's real device replay controller. It must not be described as multi-route A34 replay success.
+This native GPUI-kit POC has two explicit modes using actual Rust-to-Python private pipes: the original **mock structural execution**, and an opt-in disposable network QA mode that dispatches P1 sequential replay with P2 WSS capture. The latter passed a native three-tab A34 acceptance described below. Neither mode implements inspection skills or a real model.
 
 `gpui-smoke/src/bin/workspace.rs` has Record, Check and Results tabs. Record has named, timestamped recording checkboxes and selection order, with no inspection item controls. Check selects an existing opaque mock item and shows live events. Results explicitly loads finalized dated runs and details independently of live events. Selection order is checkbox order; clear and reselect to reorder. No selection preserves the existing default app-launch intent. This is not an actual app launch.
 
@@ -40,7 +40,7 @@ Launch target/debug/workspace.exe with the same environment. Refresh recordings;
 - Windows native build passed. Five Rust tests passed, including actual separate Python child requests, ordered demo-2 -> demo-1 -> demo-2 with distinct final run IDs and matching canonical recording IDs, live/final separation, duplicate submit and restart recovery. These are synthetic executions, not device input.
 - Python structure-only suite: 155 passed, zero skips. Added metadata identity/invalid/absent handling; existing partial, corrupt and isolated artifact cases remain included.
 - Native UI validation is recorded separately below; compiling or subprocess tests alone do not certify the screen workflow.
-- Real multi-route replay, real model execution, production layouts/virtualization/accessibility, multiple projects and durable queue recovery remain unverified.
+- The original ledger above covers mock execution. Real model execution, production layouts/virtualization/accessibility, multiple projects and automatic durable queue recovery remain unverified. Real QA replay is recorded separately below.
 
 ## Native rendering defect found during acceptance
 
@@ -50,4 +50,16 @@ After the fix, actual native checkbox input selected demo-2 -> demo-1, Check sta
 
 ## Actual device queue follow-up (separate UI)
 
-[P1 combined Tk queue](../../p1-record-replay/docs/REPLAY-QUEUE.md) now executes existing CombinedRun replay sequentially and passed A34 one-step/two-step and reversed-order repeats with separate WSS capture scopes. This does not change the native workspace synthetic-only status: a bounded native-to-device queue API and lifecycle integration remain pending.
+[P1 combined Tk queue](../../p1-record-replay/docs/REPLAY-QUEUE.md) executes existing CombinedRun replay sequentially and passed A34 one-step/two-step and reversed-order repeats with separate WSS capture scopes. The native bridge below reuses that controller.
+
+## Native-to-device QA bridge and acceptance
+
+Set `FINSEC_QA_CONFIG` to a private configuration file and `FINSEC_QA_PYTHON` to the existing P1 Python environment to opt into **REAL QA DEVICE / NO MODEL / NO INSPECTION**. Without these settings the existing mock workflow remains the default. See [QA queue API](../../p1-record-replay/docs/NATIVE-QA-QUEUE.md) for configuration and lifecycle restrictions.
+
+On 2026-11-18 the actual Windows GPUI Record tab loaded two previously GUI-recorded QA routes and selected double-send then single-send. Check submitted the whole ordered list to one Python owner. Native progress showed route 1 succeeded before route 2 prepared, followed by route 2 succeeded and cleanup verified. Results listed a completed 2/2 run and an earlier interrupted run separately. The completed details displayed independent replay IDs, network recording IDs, source recording links, and **14 / 7 WSS packet rows**, both complete for the supported P2 scope. This is actual GPUI -> Rust -> Python -> A34 QA input and WSS capture, not merely simulated transport.
+
+The first native attempt exposed a real integration defect: ADB commands inherited the JSON request pipe. The native client timed out, closed stdin and blocked further admission; the first route succeeded and the second was interrupted, with cleanup verified and a separate final record. ADB commands now use DEVNULL unless explicit receipt bytes are supplied on a dedicated input pipe. The same native sequence then completed. A real subprocess regression substitutes a stdin-consuming child for ADB and verifies that adapter, fixture and reverse commands leave the parent's protocol bytes intact; explicit restoration input still reaches its child. No response timeout was increased to hide the failure.
+
+Final read-only checks confirmed byte-identical QA receipt restoration, no reverse mappings, zero active/quarantined leases, and the user's maintained hidden API/helper settings unchanged. The native window closed normally and its owned Appium server stopped. Actual routes, screenshots, device identifiers, TLS material and packet databases remain private.
+
+Limits: this is a replay vertical slice using existing P1 GUI recordings. Native creation/editing of recordings, ordinary-app replay, real inspection/model execution, automatic crash recovery, and native active-cancel acceptance are not completed here. Original capture packets are explicitly `source_not_loaded`; the displayed counts refer to new per-replay capture. Packet attribution remains cooperating QA labels, not OS-verified general app attribution. GPUI accessibility queries were intermittent; screenshots confirmed UI actions and final results.
