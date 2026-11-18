@@ -3,6 +3,7 @@ from contextlib import closing
 from pathlib import Path
 import test_packet_access as fixture
 from integration.stdio_client import StdioClient
+from integration.recording_bundle import publish_bundle
 from test_stdio_client import message
 from test_mock_stdio import request
 
@@ -31,6 +32,51 @@ asyncio.run(worker.serve(root))
 class RecordingProcessTests(unittest.IsolatedAsyncioTestCase):
     asyncSetUp = fixture.fixture_module.ArtifactTests.asyncSetUp
     set_message = fixture.PacketAccessTests.set_message
+
+    def bundle(self):
+        root=self.root/'recordings';root.mkdir(exist_ok=True)
+        files=publish_bundle(self.files['link'],self.files['route'],self.files['packets'],root)
+        return files,files['link'].parent.name
+
+    async def test_published_partial_bundle_through_child_registry(self):
+        self.set_message(b'QA BUNDLE PARTIAL');self.record.update(status='interrupted',network_coverage='partial')
+        with closing(sqlite3.connect(self.files['packets'],isolation_level=None)) as db:
+            db.execute('UPDATE recordings SET data=?',(json.dumps(self.record),))
+        files,ref=self.bundle()
+        (self.root/'recordings'/'.bundle-unpublished').mkdir()
+        c=self.child()
+        summary=c.exchange(message('recording',{'ref':ref}))['recording']
+        self.assertEqual(summary['bundle_status'],'verified');self.assertEqual(summary['packet_status'],'partial')
+        result=self.run_ref(c,ref)
+        self.assertEqual(result['result']['items'][0]['recording_context']['bundle_status'],'verified')
+        receipt=json.loads((self.root/'receipts.jsonl').read_text().splitlines()[0])
+        self.assertEqual(receipt['packet_status'],'partial')
+        self.assertEqual(receipt['request_sha256'],hashlib.sha256(b'QA BUNDLE PARTIAL').hexdigest())
+
+    async def test_bundle_mutation_and_manifest_mismatch_block_child_executor(self):
+        self.set_message(b'QA BUNDLE');files,ref=self.bundle();c=self.child()
+        self.assertEqual(c.exchange(message('recording',{'ref':ref}))['status'],'available')
+        manifest=files['link'].parent/'manifest.json';original=manifest.read_bytes()
+        changed=json.loads(original);changed['recording_id']='synthetic-foreign'
+        manifest.write_text(json.dumps(changed),encoding='utf-8')
+        self.assertEqual(c.exchange(message('recording',{'ref':ref}))['status'],'invalid')
+        manifest.write_bytes(original)
+        with files['route'].open('ab') as stream:stream.write(b' ')  # Still valid JSON, changed committed bytes.
+        reply=c.exchange(message('recording',{'ref':ref}))
+        self.assertEqual(reply['recording']['bundle_status'],'invalid')
+        r=request();r.update(command_id='invalid-bundle',recording_ref=ref)
+        jid=c.exchange(message('submit',{'request':r}))['data']['execution_id']
+        deadline=time.monotonic()+5
+        while True:
+            state=c.exchange(message('progress',{'execution_id':jid,'cursor':0}))
+            if state['execution']['status']=='finished':break
+            self.assertLess(time.monotonic(),deadline)
+        result=c.exchange(message('result',{'run_id':state['run_id']}))['result']
+        self.assertEqual(result['execution_status'],'not_run')
+        self.assertEqual(result['reason'],'INVALID_RECORDING_BUNDLE')
+        self.assertFalse((self.root/'receipts.jsonl').exists())
+        manifest.unlink()
+        self.assertEqual(c.exchange(message('recording',{'ref':ref}))['status'],'invalid')
 
     async def test_startup_registry_limits_and_names(self):
         from integration.mock_stdio import recording_registry

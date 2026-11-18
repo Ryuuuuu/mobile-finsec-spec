@@ -11,7 +11,7 @@ class UIBridge:
         files=self.api.recordings.get(ref)
         if files is None:return self.envelope(generation,status='missing')
         summary,_=read_artifacts(files['link'],files['route'],files['packets'])
-        return self.envelope(generation,status='available',recording=summary)
+        return self.envelope(generation,status='invalid' if summary.get('bundle_status')=='invalid' else 'available',recording=summary)
     def progress(self,execution_id,generation,cursor=0):
         if type(cursor) is not int or cursor<0:raise ValueError('INVALID_CURSOR')
         state=self.api.status(execution_id);rid=state.get('run_id') or self.api.execution_runs.get(execution_id)

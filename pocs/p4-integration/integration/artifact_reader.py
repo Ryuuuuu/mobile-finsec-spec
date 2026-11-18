@@ -4,6 +4,7 @@ from contextlib import closing
 import hashlib
 import importlib.util
 import json
+import re
 from pathlib import Path
 import sqlite3
 
@@ -27,6 +28,34 @@ def bounded(path,limit):
 
 
 def read_artifacts(link_path,route_path,db_path):
+    folder=Path(link_path).parent;manifest=folder/'manifest.json'
+    bundle=manifest.exists() or manifest.is_symlink() or re.fullmatch(r'recording-[0-9a-f]{32}',folder.name)
+    if not bundle:return _read_artifacts(link_path,route_path,db_path)
+    try:
+        raw=bounded(manifest,16384);meta=decode(raw)
+        if meta.get('contract')!='p1-p2-bundle.v1':raise ValueError('VERSION')
+        paths={'link':Path(link_path),'route':Path(route_path),'packets':Path(db_path)}
+        names={'link':'combined-link.json','route':'route.json','packets':'packets.sqlite'}
+        if set(meta['files'])!=set(names.values()):raise ValueError('FILES')
+        for key,path in paths.items():
+            if path.parent.resolve()!=folder.resolve() or path.name!=names[key]:raise ValueError('SCOPE')
+        summary,payload=_read_artifacts(link_path,route_path,db_path)
+        if meta['recording_id']!=summary.get('recording_id') or meta['network_recording_id']!=payload.get('network_recording_id'):
+            raise ValueError('IDENTITY')
+        if meta['states']!={key:summary[key] for key in ('link_status','route_status','packet_status')}:
+            raise ValueError('STATES')
+        for key,path in paths.items():
+            digest=hashlib.sha256(bounded(path,16*1024*1024 if key=='packets' else 1024*1024)).hexdigest()
+            if digest!=meta['files'][names[key]] or digest!=summary['source_hashes'].get(key):raise ValueError('DIGEST')
+        if bounded(manifest,16384)!=raw:raise ValueError('CHANGED')
+        summary['bundle_status']='verified';return summary,payload
+    except (OSError,ValueError,TypeError,KeyError,AttributeError,RecursionError):
+        return dict(contract='p1-p2-artifacts.v1',mode='recording_unavailable',bundle_status='invalid',
+                    link_status='corrupt',route_status='not_read',packet_status='not_read',
+                    source_hashes={},route_count=0,packet_count=0),{'actions':[],'packets':[]}
+
+
+def _read_artifacts(link_path,route_path,db_path):
     summary=dict(contract='p1-p2-artifacts.v1',mode='recording_unavailable',
                  link_status='missing',route_status='not_read',packet_status='not_read',
                  source_hashes={},route_count=0,packet_count=0)

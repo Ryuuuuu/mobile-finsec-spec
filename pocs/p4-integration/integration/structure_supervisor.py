@@ -59,6 +59,10 @@ class StructureSupervisor:
             event=dict(seq=len(events)+1,type=kind,**data)
             journal.event(event);events.append(event)
         try:
+            if recording.get('bundle_status')=='invalid':
+                result['reason']='INVALID_RECORDING_BUNDLE'
+                for row in rows:row['reason']='INVALID_RECORDING_BUNDLE'
+                return result
             try:token=self.lease.acquire(run_id,self.epoch)
             except LeaseError:
                 result['reason']='DEVICE_BUSY_OR_RECOVERY';return result

@@ -17,7 +17,7 @@ def recording_registry(root):
     if not base.exists(): return {}
     if base.is_symlink() or not base.is_dir() or base.resolve().parent != root.resolve():
         raise ValueError('INVALID_RECORDING_ROOT')
-    entries = list(base.iterdir())
+    entries = [p for p in base.iterdir() if not p.name.startswith('.bundle-')]
     if len(entries) > 20: raise ValueError('RECORDING_REGISTRY_LIMIT')
     result = {}
     for folder in entries:
