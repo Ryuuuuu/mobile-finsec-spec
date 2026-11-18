@@ -147,8 +147,9 @@ class RelayAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         first=await self.ok_command('RECORD',command_id='start-owner-a',**args)
         self.assertEqual(first['recording_id'],'qa-owner-a')
         self.assertEqual(await self.ok_command('RECORD',command_id='start-owner-a',**args),first)
-        rejected=await self.command('STOP',expected_recording_id='qa-owner-b')
+        rejected=await self.command('STOP',expected_recording_id='qa-stranger')
         self.assertEqual(rejected['error'],'recording_scope_mismatch')
+        self.assertTrue(rejected['start_fenced'])
         self.assertEqual(self.relay.active_recording['recording_id'],'qa-owner-a')
         await self.ok_command('STOP',command_id='stop-owner-a',expected_recording_id='qa-owner-a')
         await self.make_relay();await self.ok_command('ON')
@@ -164,6 +165,43 @@ class RelayAcceptanceTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual((await self.command('STOP',expected_recording_id=value))['error'],'invalid_recording_scope')
         result=await self.ok_command('STOP',expected_recording_id='qa-never-started')
         self.assertEqual(result['status'],'idle');self.assertFalse(result['scope_matched'])
+
+    async def test_stop_before_delayed_record_survives_restart(self):
+        await self.ok_command('ON')
+        release=asyncio.Event()
+        async def delayed():
+            await release.wait()
+            return await self.command('RECORD',command_id='delayed-start',device_id='synthetic',
+                                      app_id='dev.finsec.synthetic',recording_id='qa-delayed')
+        task=asyncio.create_task(delayed());self.clients.add(task)
+        await self.ok_command('STOP',expected_recording_id='qa-delayed')
+        await self.make_relay();await self.ok_command('ON')
+        release.set();reply=await task
+        self.assertFalse(reply['ok'])
+        self.assertEqual(reply['error'],'recording_cancelled')
+        self.assertIsNone(self.relay.active_recording)
+        self.assertEqual(self.read('recordings'),[])
+        repeated=await self.command('RECORD',command_id='delayed-start',device_id='synthetic',
+                                    app_id='dev.finsec.synthetic',recording_id='qa-delayed')
+        self.assertEqual(repeated,reply)
+
+    async def test_failed_cancellation_storage_is_not_success_and_cap_is_closed(self):
+        self.relay.store.fail_writes=True
+        reply=await self.command('STOP',expected_recording_id='qa-uncertain')
+        self.assertFalse(reply['ok']);self.assertTrue(reply['state_may_have_changed'])
+        self.relay.store.fail_writes=False
+        def fill():
+            with self.relay.store.conn:
+                self.relay.store.conn.executemany('INSERT INTO cancelled_recordings VALUES (?,?)',
+                                                [('qa-fence-'+str(i),'synthetic') for i in range(4096)])
+        await self.relay.store.run(fill)
+        rejected=await self.command('STOP',expected_recording_id='qa-excess')
+        self.assertEqual(rejected['error'],'cancellation_registry_full')
+        self.assertFalse(rejected['ok'])
+        self.assertEqual((await self.ok_command('STOP',expected_recording_id='qa-fence-0'))['status'],'idle')
+        await self.ok_command('ON')
+        await self.ok_command('RECORD',device_id='synthetic',app_id='dev.finsec.synthetic',recording_id='qa-existing')
+        self.assertEqual((await self.ok_command('STOP',expected_recording_id='qa-existing'))['status'],'completed')
 
     def read(self, kind, **kwargs):
         result = query(self.db, kind=kind, **kwargs)

@@ -199,6 +199,7 @@ class Store:
                     sequence INTEGER NOT NULL, data TEXT NOT NULL, request BLOB, response BLOB);
                 CREATE INDEX IF NOT EXISTS packet_recording ON packets(recording_id,sequence);
                 CREATE TABLE IF NOT EXISTS commands (id TEXT PRIMARY KEY, digest TEXT NOT NULL, result TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS cancelled_recordings (id TEXT PRIMARY KEY, created_at TEXT NOT NULL);
                 PRAGMA user_version=1;
             ''')
             for rid, data in self.conn.execute('SELECT id,data FROM recordings').fetchall():
@@ -233,6 +234,16 @@ class Store:
 
     async def record(self, record):
         await self.run(self._record, clone(record))
+
+    def _cancel_recording_id(self, recording_id):
+        self._check_write()
+        with self.conn:
+            # Existing records already forbid ID reuse, including after restart.
+            if self.conn.execute('SELECT 1 FROM recordings WHERE id=?',(recording_id,)).fetchone():return
+            if not self.conn.execute('SELECT 1 FROM cancelled_recordings WHERE id=?',(recording_id,)).fetchone():
+                if self.conn.execute('SELECT count(*) FROM cancelled_recordings').fetchone()[0]>=4096:
+                    raise ValueError('cancellation_registry_full')
+                self.conn.execute('INSERT INTO cancelled_recordings VALUES (?,?)',(recording_id,now()))
 
     def _packet(self, packet):
         if self.write_delay_seconds:
@@ -704,6 +715,7 @@ class Relay:
                 return clone(response)
             except ValueError as exc:
                 response = envelope(error=str(exc))
+                if str(exc)=='recording_scope_mismatch':response['start_fenced']=True
                 self.command_cache[payload['command_id']] = (digest, response)
                 return clone(response)
 
@@ -740,6 +752,8 @@ class Relay:
             recording_id=payload.get('recording_id') or uid()
             exists=await self.store.run(lambda:self.store.conn.execute('SELECT 1 FROM recordings WHERE id=?',(recording_id,)).fetchone())
             if exists:raise ValueError('recording_id_exists')
+            cancelled=await self.store.run(lambda:self.store.conn.execute('SELECT 1 FROM cancelled_recordings WHERE id=?',(recording_id,)).fetchone())
+            if cancelled:raise ValueError('recording_cancelled')
             record = dict(schema_version=VERSION, recording_id=recording_id, session_id=self.session_id, run_id=None,
                           event_id=uid(), timestamp=now(), started_at=now(), monotonic_start=time.monotonic(),
                           status='recording', network_coverage='unknown' if self.relay_state == 'on' else 'none',
@@ -766,10 +780,11 @@ class Relay:
             return dict(recording_id=record['recording_id'], status='recording')
         if cmd == 'STOP':
             expected=payload.get('expected_recording_id')
+            if expected is not None:await self.store.run(self.store._cancel_recording_id,expected)
             if expected is not None and self.active_recording and self.active_recording['recording_id']!=expected:
                 raise ValueError('recording_scope_mismatch')
             if not self.active_recording:
-                if expected is not None:return dict(recording_id=expected,status='idle',scope_matched=False)
+                if expected is not None:return dict(recording_id=expected,status='idle',scope_matched=False,start_fenced=True)
                 return dict(recording_id=self.last_recording['recording_id'] if self.last_recording else None, status='idle')
             record = self.active_recording
             self.active_recording = None  # seal without awaiting storage or drain

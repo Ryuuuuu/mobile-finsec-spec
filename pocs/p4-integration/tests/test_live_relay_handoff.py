@@ -71,6 +71,28 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
     def read_files(self,files):
         return read_artifacts(link_path=files['link'],route_path=files['route'],db_path=files['packets'])
 
+    async def test_start_timeout_then_late_dispatch_cannot_create_recording(self):
+        release=asyncio.Event();futures=[];network=self.combined.network;test=self
+        class DelayedNetwork:
+            def command(_,operation,**kwargs):
+                if operation!='RECORD':return network.command(operation,**kwargs)
+                async def delayed():
+                    await release.wait()
+                    return await test.relay.command(dict(schema_version=1,command_id='late-start',command='RECORD',**kwargs))
+                future=asyncio.run_coroutine_threadsafe(delayed(),test.loop);futures.append(future)
+                return future.result(timeout=.03)  # Controlled transport delay before actual dispatch.
+        self.combined.network=DelayedNetwork()
+        try:
+            with self.assertRaises(TimeoutError):await asyncio.to_thread(self.combined.start)
+        finally:release.set()
+        reply=await asyncio.wrap_future(futures[0])
+        self.assertEqual(reply['error'],'recording_cancelled')
+        self.assertIsNone(self.relay.active_recording)
+        self.assertEqual(self.stop_calls,1)
+        self.assertTrue(self.combined.link['network_stop']['start_fenced'])
+        self.assertEqual(self.engine.record['status'],'incomplete')
+        self.assertNotIn('input_enabled',(self.combined.j.path/'events.jsonl').read_text())
+
     async def test_bundle_selects_one_record_and_detaches_sources(self):
         await self.capture('/normal',seal=False);first=dict(self.files)
         await self.capture('/second',b'QA OTHER',seal=False)
