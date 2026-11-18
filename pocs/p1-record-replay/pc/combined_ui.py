@@ -71,13 +71,31 @@ class Network:
 class CombinedWindow(MirrorWindow):
     def __init__(self,root,args,network):
         self.network=network;self.sync=None;self.abort_pending=False
-        super().__init__(root,args)
+        from device_resources import Reservation
+        self.reservation=Reservation(args.device)
+        try:self.reservation.acquire()
+        except Exception:network.close();raise
+        args.device_lease=self.reservation
+        try:super().__init__(root,args)
+        except Exception:
+            self.reservation.poison('Combined GUI initialization failed; verify owned resources');self.reservation.end();network.close();raise
         self.sync=CombinedRun(self.engine,network,args.output)
         self.engine.start=self.sync.start;self.engine.finish=self.sync.finish;self.engine.replay=self.sync.replay
         root.title('Finsec P1 + P2 - COMBINED QA RECORDING')
         self.postid.set('dev.finsec.qa.network:id/state');self.posttext.set('ready')
         self.sync_status=tk.StringVar();ttk.Label(self.post_selector.master,textvariable=self.sync_status,wraplength=300).pack()
         self.sync_tick()
+    def prepare_fixture(self,protocol):
+        from device_resources import OwnedReverse
+        self.reverse_mapping=OwnedReverse(self.args.adb,self.args.device,self.network.port)
+        try:
+            self.reverse=self.reverse_mapping.allocate()
+            self.reverse_mapping.verify()
+            self.sync.preflight=self.reverse_mapping.verify
+            self.fixture_token='qa-'+uuid.uuid4().hex[:12]
+            subprocess.run([self.args.adb,'-s',self.args.device,'shell','am','start','-S','-n',self.args.package+'/.MainActivity','--es','protocol',protocol,'--ei','port',self.reverse,'--es','token',self.fixture_token,'--ez','interactive','true'],check=True,capture_output=True,timeout=15)
+        except Exception:
+            self.reservation.poison('Fixture startup failed; verify owned reverse mapping');raise
     def sync_tick(self):
         if self.closing:return
         self.sync_status.set('Combined recording: '+self.sync.state+'\nInput/network IDs are linked in local combined.json')
@@ -110,7 +128,10 @@ class CombinedWindow(MirrorWindow):
             finally:
                 try:self.network.close()
                 finally:
-                    if hasattr(self,'reverse'):subprocess.run([self.args.adb,'-s',self.args.device,'reverse','--remove','tcp:'+self.reverse],check=True,capture_output=True,timeout=10)
+                    try:
+                        if hasattr(self,'reverse_mapping'):self.reverse_mapping.close()
+                    except Exception:
+                        self.reservation.poison('Owned reverse cleanup not confirmed');raise
         self.tasks.put((cleanup_network,None));super().close()
 
 def main():
@@ -125,10 +146,9 @@ def main():
     root=tk.Tk()
     if not messagebox.askyesno('Combined QA fixture','Start whole-device video and the disposable QA loopback fixture? Input requires an approved Appium session. No global proxy or CA is changed.',parent=root):root.destroy();return
     network=Network(args.output,args.pki if args.protocol in ('https','wss','okhttp-https') else None,args.protocol in ('ws','wss'));window=CombinedWindow(root,args,network)
-    reverse=subprocess.check_output([args.adb,'-s',args.device,'reverse','tcp:0','tcp:'+str(network.port)],text=True).strip()
-    if not reverse.isdigit():raise RuntimeError('No owned reverse port')
-    window.reverse=reverse
-    subprocess.run([args.adb,'-s',args.device,'shell','am','start','-S','-n',args.package+'/.MainActivity','--es','protocol',args.protocol,'--ei','port',reverse,'--es','token','qa-'+uuid.uuid4().hex[:12],'--ez','interactive','true'],check=True,capture_output=True,timeout=15)
+    try:window.prepare_fixture(args.protocol)
+    except Exception:
+        window.close();root.mainloop();raise
     root.mainloop()
 
 if __name__=='__main__':main()

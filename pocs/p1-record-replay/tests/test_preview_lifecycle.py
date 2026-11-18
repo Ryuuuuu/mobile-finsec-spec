@@ -37,6 +37,18 @@ def window():
 
 
 class PreviewLifecycleTest(unittest.TestCase):
+    def test_reserved_fixture_releases_after_adapter_cleanup(self):
+        from pathlib import Path
+        import sys
+        sys.path.insert(0,str(Path(__file__).resolve().parents[2]/'p2-proxy-relay'))
+        from device_resources import Reservation
+        w=window();w.engine.stop_requested=Mock();w.adapter.uncertain=False;w.adapter.session=None
+        underlying=Mock();underlying.quarantine.exists.return_value=False
+        w.lease=Reservation('synthetic',lambda _:underlying);w.lease.acquire()
+        w.adapter.close.side_effect=lambda:underlying.release.assert_not_called()
+        w.close();cleanup,finished=w.tasks.get_nowait();underlying.release.assert_not_called()
+        cleanup();underlying.release.assert_called_once_with(clean=True)
+
     def test_close_waits_for_cleanup_without_querying_destroyed_tk(self):
         w = window(); w.engine.stop_requested = Mock()
         w.adapter.uncertain = False; w.adapter.session = None

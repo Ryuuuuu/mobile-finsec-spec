@@ -26,7 +26,7 @@ class Window:
         self.busy=False; self.observing=False; self.pending_input=None
         self.closing=False; self.connected=False; self.frame=None; self.image=None; self.start_point=None
         self.adapter=Appium(args.device,args.package,args.server,session_create_timeout=args.session_create_timeout); self.engine=Engine(self.adapter,args.output,args.allow_coordinates)
-        self.lease=Lease(args.device)
+        self.lease=getattr(args,'device_lease',None) or Lease(args.device)
         self.generic=args.package!=p.PACKAGE
         root.title('Finsec P1 · SELECTED APP QA'); root.geometry('1050x820')
         controls=ttk.Frame(root,padding=10); controls.pack(side='right',fill='y')
@@ -306,7 +306,10 @@ class Window:
                     atomic(self.baseline_path.with_suffix('.restored.json'),{'status':'verified','baseline':self.baseline_path.name})
             except Exception as e:self.lease.poison('Cleanup not confirmed: '+str(e))
             if self.adapter.uncertain:self.lease.poison('Transport uncertainty; manually stop Appium before recovery')
-            self.lease.release(clean=not self.adapter.uncertain and not self.adapter.session)
+            finish=getattr(type(self.lease),'finish',None)
+            clean=not self.adapter.uncertain and not self.adapter.session
+            if finish:finish(self.lease,clean=clean)
+            else:self.lease.release(clean=clean)
         finished=False
         def finish_close(_):
             nonlocal finished

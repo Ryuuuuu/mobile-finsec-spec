@@ -4,7 +4,7 @@ from .core import Journal,atomic
 class CombinedRun:
     def __init__(self,engine,network,output):
         self.engine=engine;self.network=network;self.output=output;self.state='idle';self.j=None;self.link={};self.terminated=False;self.stop_attempted=False
-        self.input_start=engine.start;self.input_finish=engine.finish;self.input_replay=getattr(engine,"replay",None)
+        self.input_start=engine.start;self.input_finish=engine.finish;self.input_replay=getattr(engine,"replay",None);self.preflight=lambda:None
     def save(self):
         atomic(self.j.path/'combined.json',dict(self.link,status=self.state))
         if self.engine.j and self.engine.j.id==self.link.get('input_recording_id'):atomic(self.engine.j.path/'combined-link.json',dict(self.link,status=self.state))
@@ -14,6 +14,7 @@ class CombinedRun:
         self.j=Journal(self.output,'combined');self.state='starting';self.link={'combined_id':self.j.id}
         self.j.write('start_requested');self.save()
         try:
+            self.preflight()
             self.input_start();self.link['input_recording_id']=self.engine.j.id
             self.j.write('input_prepared',recording_id=self.engine.j.id)
             result=self.network.command('RECORD',device_id='selected-device',app_id=self.engine.a.package)
@@ -43,6 +44,7 @@ class CombinedRun:
         self.link={'combined_id':self.j.id,'kind':'replay','source_recording_id':route['recording_id']}
         self.engine.cancel.clear();self.j.write('start_requested');self.save()
         try:
+            self.preflight()
             result=self.network.command('RECORD',device_id='selected-device',app_id=self.engine.a.package)
             self.link['network_recording_id']=result['recording_id']
             self.j.write('network_start_ack',recording_id=result['recording_id'])
@@ -70,6 +72,6 @@ class CombinedRun:
             self.j.write('network_abort_stop_ack')
         except Exception:
             self.link['network_stop_uncertain']=True;self.j.write('network_stop_uncertain')
-        if self.link.get('kind')!='replay' and hasattr(self.engine,'record'):
+        if self.link.get('kind')!='replay' and hasattr(self.engine,'record') and self.engine.j and self.engine.j.id==self.link.get('input_recording_id'):
             self.engine.record['status']='incomplete';atomic(self.engine.j.path/'route.json',self.engine.record)
         self.save();self.terminated=True

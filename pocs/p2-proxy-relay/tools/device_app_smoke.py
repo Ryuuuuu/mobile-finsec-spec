@@ -3,11 +3,12 @@ import argparse,asyncio,base64,json,re,ssl,sys,uuid
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]))
 from relay import Config,Relay,query
+from device_resources import OwnedReverse,device_lease
 from websocket_relay import read_frame
 from websockets.frames import Frame,OP_CLOSE
 PACKAGE='dev.finsec.qa.network'
 
-async def main(args):
+async def run_fixture(args):
     args.output.mkdir(parents=True,exist_ok=True)
     async def adb(*command,check=True):
         proc=await asyncio.create_subprocess_exec(args.adb,'-s',args.device,*command,stdout=asyncio.subprocess.PIPE,stderr=asyncio.subprocess.PIPE)
@@ -50,12 +51,13 @@ async def main(args):
         config=Config(db=db,upstream_port=server.sockets[0].getsockname()[1],enable_websocket=ws,
             listener_cert=listener_pki/'server.pem' if tls else None,listener_key=listener_pki/'server.key' if tls else None,
             upstream_tls=tls,upstream_ca=args.pki/'assets/qa-ca.pem' if tls else None,io_timeout=5)
-        relay=Relay(config);reverse=None
+        relay=Relay(config);reverse=None;mapping=None
         async def command(name,**extra):
             result=await relay.command(dict(schema_version=1,command_id=uuid.uuid4().hex,command=name,**extra))
             assert result['ok'],result
             return result['result']
         async def invoke(token,expect_failure=False):
+            await asyncio.to_thread(mapping.verify)
             # Only this newly created disposable app is stopped; no pm clear or other app data is touched.
             await adb('shell','am','force-stop',PACKAGE)
             await adb('shell','am','start','-n',PACKAGE+'/.MainActivity','--es','protocol',protocol,'--ei','port',reverse,'--es','token',token)
@@ -74,7 +76,8 @@ async def main(args):
             raise TimeoutError('QA receipt did not arrive')
         try:
             await relay.start();on=await command('ON')
-            reverse=(await adb('reverse','tcp:0','tcp:'+str(on['listen_port']))).decode().strip();assert reverse.isdigit()
+            mapping=OwnedReverse(args.adb,args.device,on['listen_port'])
+            reverse=await asyncio.to_thread(mapping.allocate)
             prefix='qa-'+uuid.uuid4().hex[:12]
             pre=prefix+'-pre';post=prefix+'-post'
             if args.untrusted_listener:
@@ -105,11 +108,22 @@ async def main(args):
             results.append(result);print(json.dumps(result),flush=True)
             (args.output/(protocol+'-receipts.json')).write_text(json.dumps(receipts,indent=2))
         finally:
-            if reverse:await adb('reverse','--remove','tcp:'+reverse)
-            await relay.close();server.close();await server.wait_closed()
-            for task in list(tasks):task.cancel()
-            if tasks:await asyncio.gather(*tasks,return_exceptions=True)
+            try:
+                if mapping:await asyncio.to_thread(mapping.close)
+            finally:
+                await relay.close();server.close();await server.wait_closed()
+                for task in list(tasks):task.cancel()
+                if tasks:await asyncio.gather(*tasks,return_exceptions=True)
     (args.output/'summary.json').write_text(json.dumps(results,indent=2))
+
+async def main(args,lease_factory=device_lease,fixture=run_fixture):
+    lease=lease_factory(args.device);lease.acquire()
+    clean=False
+    try:
+        await fixture(args);clean=True
+    except BaseException:
+        lease.poison('Standalone QA aborted; verify device and owned resources before recovery');raise
+    finally:lease.release(clean=clean)
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser(description=__doc__)

@@ -61,3 +61,7 @@ The dedicated app now also exposes native and WebView HTTP buttons for [P1/P2 co
 ## OkHttp and integrated replay follow-up
 
 The pinned OkHttp 4.12.0 (Apache-2.0) loopback fixture passed HTTP and HTTPS on the real Android device: 3 captured transactions each, pre/post delivery excluded. HTTPS rejected an unrelated CA with SSLHandshakeException and zero stored/upstream requests. The full six-protocol matrix passed; no global CA or proxy was changed. This is cooperative QA token correlation, not OS-enforced attribution or support for arbitrary apps. See [combined GUI results](../../p1-record-replay/docs/COMBINED-RECORDING.md) for actual HTTPS GUI record/replay success and the WSS GUI disconnection that remains unaccepted.
+
+## Reverse port and device ownership
+
+The standalone app harness now requires the sibling P1 source for its shared device lease and cannot run against a live GUI fixture. It allocates an explicit device port using --no-rebind, verifies mappings before requests, and cleans only owned mappings. See [diagnosis, modeled regression and pending device gate](../../p1-record-replay/docs/ADB-REVERSE-RECOVERY.md). This revision has device-free regression coverage; device validation remains pending authorization.

@@ -17,6 +17,13 @@ class CombinedTests(unittest.TestCase):
             return {'recording_id':'net-1'} if name=='RECORD' else {'network_coverage':'complete_for_supported_scope'}
         network.command.side_effect=command
         return CombinedRun(engine,network,root),engine,network
+    def test_preflight_failure_preserves_previous_record(self):
+        with tempfile.TemporaryDirectory() as root:
+            run,engine,network=self.make(root);run.start();run.finish();original=engine.j
+            run.preflight=Mock(side_effect=RuntimeError('mapping changed'))
+            with self.assertRaises(RuntimeError):run.start()
+            self.assertEqual(engine.record['status'],'completed');self.assertIs(engine.j,original)
+            self.assertEqual(run.state,'partial')
     def test_start_barrier_ids_and_stop_completion(self):
         with tempfile.TemporaryDirectory() as root:
             run,engine,network=self.make(root);run.start();self.assertEqual(run.state,'active')
