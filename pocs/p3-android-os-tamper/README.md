@@ -105,3 +105,5 @@ python -m android_probe --adb C:\Tools\platform-tools\adb.exe --device YOUR_SERI
 The sibling P1 source is required for the shared device lease. Stop P1 and verify any failed cleanup before running; active/quarantine markers are never automatically cleared. Keep results private. Exit 0 means observation collection completed, not a security pass; 5 means not run, 3 timeout, 4 cancellation, 2 tool/storage failure. Missing properties remain unknown.
 
 Follow-up verification is documented in [read-only validation](docs/ANDROID-READONLY-VALIDATION.md).
+
+Validate a saved read-only report without contacting any device: `python -m android_probe --validate --output C:\QA\private-p3-run`. Successful validation means the report is internally consistent; the security verdict remains inconclusive.

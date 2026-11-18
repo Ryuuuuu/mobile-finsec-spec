@@ -9,3 +9,7 @@ Each command has a five-second bound and a 4 KiB retained output limit. Write st
 Always emit CHK-07 verdict=inconclusive with explicit missing stock/tampered attestation, protected-service oracle, and causal block reason. Properties are self-reported environment hints and can be spoofed; secure boot indicators are not a tamper attestation. Shell UID is not application UID. SELinux enforcing is not proof of app protection. No inference from app exit alone.
 
 Validation: injected successful/empty/error/timeout/disconnected observations, no mutation command path, output reuse rejection, lease rejection; real-device run only when the authorized A34 is connected and prior P1 cleanup is verified. Physical device disconnection currently blocks that gate. This spec is committed before implementation; synthetic engine/manifest/skills remain unchanged.
+
+## Device-free hardening extension
+
+The adapter itself rejects any command outside the fixed read-only allowlist before spawning a process. Unexpected observation failure is distinguished from lease admission failure; cleanup failure cannot emit completion. `--validate --output DIR` checks the separate report contract, fixed command order, allowed observation states, value hashes, mandatory inconclusive reasons and completion marker. Hashes detect accidental changes; they do not authenticate device truth or defeat deliberate coordinated fabrication. Tests include actual local Python child processes used as transport stubs and a real five-second subprocess timeout. These are not Android or real model tests.
