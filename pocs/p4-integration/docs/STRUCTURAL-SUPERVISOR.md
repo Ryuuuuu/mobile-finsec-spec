@@ -21,3 +21,5 @@ Seven new async tests cover common-only/AOS/iOS delivery and sequential completi
 Future product work: formal provider-neutral executor/job contracts, stream-based progress/liveness, durable model uncertainty ownership, content-neutral GUI/history validation, bounded process isolation and multi-device registry. User-authored check skills and their tools/verdict rules remain outside this scope.
 
 Final validation: 47 selected structural tests passed, zero skips on Windows/Python 3.12.10. Fresh-process import verification confirmed no os_tamper, p3_adapter or legacy_supervisor module was loaded by StructureSupervisor. 109 traceability links resolve. The old judgement suite was not executed.
+
+The [recording reference contract](RECORDING-CONTEXT.md) adds common-ID P1 route/P2 packet metadata to each mock item context and saved result. It preserves missing/incomplete data independently of execution status; no real artifact reader or replay is enabled.

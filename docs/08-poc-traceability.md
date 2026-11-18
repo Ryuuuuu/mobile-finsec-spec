@@ -158,3 +158,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Structural Supervisor separation
 
 [Active mock-only runner](../pocs/p4-integration/docs/STRUCTURAL-SUPERVISOR.md) now loads and delivers opaque common/AOS/iOS snapshots, runs items sequentially under a synthetic-device lease, and records missing/failed/timed_out/cancelled/completed separately. It does not import P3 judgement; legacy aliases are preserved only for historical paths. Real device/model execution remains unverified.
+
+### Recording-reference structural handoff
+
+[Common-ID recording contract](../pocs/p4-integration/docs/RECORDING-CONTEXT.md) passes synthetic P1 route/P2 packet references to selected sequential mock agents and persists independent collection/execution states. 54 structural tests passed. Real artifact mapping/replay/capture/model execution is not implemented or validated by this change.
