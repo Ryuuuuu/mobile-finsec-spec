@@ -74,7 +74,9 @@ class CombinedRun:
             self.state='stopping';self.j.write('input_closed');self.save();self.stop_attempted=True
             stopped=self.stop_network();self.link['network_stop']=stopped
             self.j.write('network_stop_ack',coverage=stopped.get('network_coverage'))
-            complete=result['status']=='succeeded' and stopped.get('network_coverage')=='complete_for_supported_scope'
+            cancelled=self.engine.cancel.is_set()
+            if cancelled:self.link['cancel_requested']=True;self.j.write('replay_cancel_observed')
+            complete=not cancelled and result['status']=='succeeded' and stopped.get('network_coverage')=='complete_for_supported_scope'
             self.state='completed' if complete else 'partial'
             self.j.write('combined_finished',status=self.state);self.save();self.terminated=True
             self.state='idle' if complete else 'partial'

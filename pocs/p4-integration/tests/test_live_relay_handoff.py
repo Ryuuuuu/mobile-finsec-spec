@@ -85,6 +85,30 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.engine.record['status'],'incomplete')
         self.assertTrue(self.combined.link['network_stop_uncertain'])
 
+    async def test_cancel_during_replay_stop_keeps_input_success_but_combined_partial(self):
+        await self.capture('/normal',seal=False)
+        source=self.files['route'];saved=source.read_bytes();route=json.loads(saved)
+        self.engine.a=p1_fixture.Fake();click=self.engine.a.click;test=self
+        def network_click(element):
+            click(element)
+            asyncio.run_coroutine_threadsafe(test.request('/replay'),test.loop).result(3)
+        self.engine.a.click=network_click
+        network=self.combined.network
+        class CancelOnStop:
+            def command(_,operation,**kwargs):
+                result=network.command(operation,**kwargs)
+                if operation=='STOP':test.engine.stop_requested()
+                return result
+        self.combined.network=CancelOnStop()
+        result=await asyncio.to_thread(self.combined.replay,route)
+        self.assertEqual(result['status'],'incomplete');self.assertEqual(result['input_status'],'succeeded')
+        self.assertEqual(json.loads((self.engine.j.path/'result.json').read_text())['status'],'succeeded')
+        link=json.loads((self.engine.j.path/'combined-link.json').read_text())
+        self.assertEqual(link['status'],'partial');self.assertTrue(link['cancel_requested'])
+        self.assertEqual(link['network_stop']['network_coverage'],'complete_for_supported_scope')
+        self.assertEqual(source.read_bytes(),saved)
+        self.assertIsNone(self.relay.active_recording)
+
     async def test_relay_closed_before_input_stop_does_not_complete_input(self):
         await self.prepare_capture()
         await self.relay.close()  # Unexpected by P1, but orderly relay shutdown (not a kill).

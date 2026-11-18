@@ -156,6 +156,7 @@ class Engine:
                 self.a.gesture(xy(a['point']),xy(a['end']) if t=='swipe' else None)
             self.condition(a['post'],a['timeout'])
             after=self.evidence(action_id,'after'); after['input']='not_applicable' if t=='wait' else 'dispatch_acknowledged_and_postcondition_observed'
+            if self.cancel.is_set():raise InterruptedError('Cancelled during final observation')
             self.j.write('result',action_id=action_id,status='succeeded',after=after)
         except Exception as e:
             try: self.j.write('result',action_id=action_id,status='incomplete' if isinstance(e,(Uncertain,InterruptedError,OSError)) else 'failed',reason=str(e))
@@ -198,6 +199,7 @@ class Engine:
                 for i,s in enumerate(route['actions']):
                     result['steps'][i]['status']='incomplete'
                     self.execute(s['action'],s['action_id']); result['steps'][i]['status']='succeeded'
+                if self.cancel.is_set():raise InterruptedError('Cancelled before replay finalization')
                 result['status']='succeeded'
             except Exception as e:
                 result['reason']=str(e); result['status']='incomplete' if isinstance(e,(InterruptedError,Uncertain,OSError)) else 'failed'

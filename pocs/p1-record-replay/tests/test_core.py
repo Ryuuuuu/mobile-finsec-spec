@@ -117,6 +117,27 @@ class EngineTest(unittest.TestCase):
         self.a.click=click
         with self.assertRaises(InterruptedError):self.e.record_action(tap())
         self.assertEqual(self.e.steps,[])
+
+    def test_cancel_during_last_observation_never_completes_replay(self):
+        route=self.recording();self.e.a=Fake();original=self.e.evidence
+        def evidence(action_id,phase):
+            result=original(action_id,phase)
+            if phase=='after':self.e.stop_requested()
+            return result
+        self.e.evidence=evidence
+        result=self.e.replay(route)
+        self.assertEqual(result['status'],'incomplete')
+        self.assertEqual(len(self.e.a.inputs),1)
+
+    def test_cancel_during_last_result_write_preserves_step_but_not_run_success(self):
+        route=self.recording();self.e.a=Fake();original=Journal.write
+        def write(journal,event,**data):
+            original(journal,event,**data)
+            if event=='result':self.e.stop_requested()
+        with patch.object(Journal,'write',write):result=self.e.replay(route)
+        self.assertEqual(result['status'],'incomplete')
+        self.assertEqual(result['steps'][0]['status'],'succeeded')
+        self.assertEqual(len(self.e.a.inputs),1)
     def test_lock_and_quarantine(self):
         with patch('pathlib.Path.home',return_value=pathlib.Path(self.tmp.name)):
             a=Lease('test');b=Lease('test');a.acquire()
