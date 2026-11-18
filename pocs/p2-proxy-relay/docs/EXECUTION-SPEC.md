@@ -144,3 +144,31 @@ Compatibility: the table is additive and artifact schema stays v1; P4 selected s
 Tests use explicit test barriers to delay arrival; this is controlled transport reordering, not an observed USB/network incident. Actual P1 CombinedRun times out before relay dispatch, issues one scoped compensation STOP, and the released request is rejected; input never becomes enabled and remains incomplete. Relay tests cover persistence across restart, identical retry, cancellation storage failure, registry capacity and STOP for an existing record at capacity. No device, installer or inspection skill is involved.
 Delayed-start validation: P2 relay 39/39 PASS (10.703s), P1 combined 22/22 PASS (2.936s), CLI/WSS 1/1 PASS (4.935s), P4 structural 133/133 PASS zero skips (25.798s).
 Closed-instance follow-up: after Relay.close, all commands (including STATUS/ON) return relay_closed before storage access under the existing command lock. This prevents command-history lookup from recreating WAL sidecars after storage seal. Reopen with a new Relay instance. Actual P1/P4 handoff tests distinguish partial input from complete packets and interrupted recovery after injected finalization failure; see ../../p4-integration/docs/LIVE-RELAY-HANDOFF.md.
+
+## Recovery failure transaction boundary (offline follow-up)
+
+The existing Store startup recovery was exercised with two records emitted by
+the actual loopback relay. In a temporary database only, their saved terminal
+states were changed to unfinished states to create a deterministic recovery
+fixture. A SQLite trigger rejects the second recovery UPDATE. This is deliberate
+SQL failure injection, not a new observed process crash or physical disk failure.
+
+The failed Relay.start leaves no connection or file-lock owner. All recording,
+packet (including request/response BLOB), command and cancellation rows match
+their pre-attempt values: the earlier recording UPDATE is rolled back with the
+later failure. Removing only the test trigger permits a fresh Relay to reopen
+the same DB, recover both records as interrupted/partial, and remain off. A
+second successful reopen leaves the recovered records unchanged, with exactly
+one process_interrupted gap each. Packet/control rows remain unchanged.
+
+No production defect was reproduced, so no recovery behavior was changed. The
+existing startup recovery applies only when the caller explicitly opens the same
+database. This does not add automatic DB discovery, salvage of corrupt SQLite,
+retention/repair policy, resume of capture, clearing of device quarantine, or a
+claim about power-loss durability. A recovery failure must still be reported as
+failure rather than treating old unfinished rows as completed. Choices about
+operator repair and archival remain product decisions.
+
+Validation: test_relay.py 41/41 PASS (10.988s), ResourceWarning-as-error, including
+`test_recovery_write_failure_rolls_back_all_rows_and_releases_owner`. Uses synthetic
+records and local loopback only; no device, model, inspection skill or installation.

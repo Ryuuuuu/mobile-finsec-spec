@@ -862,6 +862,45 @@ asyncio.run(main())
         with self.assertRaisesRegex(ValueError, "relay_upstream_port_conflict"):
             Relay(Config(db=self.db, upstream_port=self.upstream.port, listen_port=self.upstream.port))
 
+    async def test_recovery_write_failure_rolls_back_all_rows_and_releases_owner(self):
+        # Existing actual producer data, then a synthetic persisted unfinished state.
+        from contextlib import closing
+        await self.ok_command('ON')
+        ids=[]
+        for number in range(2):
+            ids.append(await self.record())
+            await self.exchange('/recovery-'+str(number),b'synthetic-recovery')
+            await self.ok_command('STOP')
+        await self.relay.close();self.relay=None
+        with closing(sqlite3.connect(self.db)) as db,db:
+            for rid in ids:
+                raw=db.execute('SELECT data FROM recordings WHERE id=?',(rid,)).fetchone()[0]
+                row=json.loads(raw);row.update(status='recording',network_coverage='partial',ended_at=None)
+                db.execute('UPDATE recordings SET data=? WHERE id=?',(json.dumps(row),rid))
+            db.execute("CREATE TRIGGER recovery_fault BEFORE UPDATE ON recordings WHEN OLD.id='"+ids[1]+"' BEGIN SELECT RAISE(ABORT,'synthetic recovery write fault'); END")
+            before={table:db.execute('SELECT * FROM '+table+' ORDER BY rowid').fetchall() for table in ('recordings','packets','commands','cancelled_recordings')}
+        failed=Relay(Config(db=self.db,upstream_port=self.upstream.port))
+        with self.assertRaisesRegex(sqlite3.IntegrityError,'synthetic recovery write fault'):
+            await failed.start()
+        self.assertFalse(failed.started);self.assertIsNone(failed.store.conn);self.assertIsNone(failed.store.lock)
+        # Even the first update must not survive failure on the second recording.
+        with closing(sqlite3.connect(self.db)) as db,db:
+            after={table:db.execute('SELECT * FROM '+table+' ORDER BY rowid').fetchall() for table in before}
+            self.assertEqual(before,after)
+            db.execute('DROP TRIGGER recovery_fault')  # Remove only the test fault, not captured data.
+        await self.make_relay()
+        recovered=[self.recording(rid) for rid in ids]
+        for record in recovered:
+            self.assertEqual(record['status'],'interrupted')
+            self.assertEqual(record['network_coverage'],'partial')
+            self.assertEqual(sum(g['reason']=='process_interrupted' for g in record['gaps']),1)
+        self.assertEqual(self.relay.status()['relay_state'],'off')
+        await self.make_relay()
+        self.assertEqual(recovered,[self.recording(rid) for rid in ids])
+        with closing(sqlite3.connect(self.db)) as db:
+            for table in ('packets','commands','cancelled_recordings'):
+                self.assertEqual(before[table],db.execute('SELECT * FROM '+table+' ORDER BY rowid').fetchall())
+
 
 if __name__ == "__main__":
     unittest.main()
