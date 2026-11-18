@@ -106,6 +106,22 @@ class ReplayTests(CombinedTests):
             self.assertEqual(run.link['input_status'],'failed');self.assertEqual(run.state,'partial')
 
 class NetworkLifecycleTests(unittest.TestCase):
+    def test_failed_start_does_not_stop_existing_network_recording(self):
+        from pc.combined_ui import Network
+        for fail_preflight in (False,True):
+            with self.subTest(preflight=fail_preflight),tempfile.TemporaryDirectory() as root:
+                network=Network(root)
+                try:
+                    existing=network.command('RECORD',device_id='synthetic',app_id='dev.finsec.qa.network')
+                    run,engine,_=CombinedTests().make(root);run.network=network
+                    if fail_preflight:run.preflight=Mock(side_effect=RuntimeError('synthetic preflight failure'))
+                    with self.assertRaises(RuntimeError):run.start()
+                    active=network.command('STATUS')['active_recording']
+                    self.assertIsNotNone(active)
+                    self.assertEqual(active['recording_id'],existing['recording_id'])
+                    self.assertNotIn('network_stop',run.link)
+                finally:network.close()
+
     def test_favicon_and_request_close_cleanly(self):
         import urllib.request
         from pc.combined_ui import Network
@@ -120,3 +136,19 @@ class NetworkLifecycleTests(unittest.TestCase):
                 self.assertEqual(network.command('STOP')['network_coverage'],'complete_for_supported_scope')
             finally:network.close()
             self.assertFalse(network.thread.is_alive())
+
+    def test_failed_replay_start_preserves_existing_network_recording(self):
+        from pc.combined_ui import Network
+        for fail_preflight in (False,True):
+            with self.subTest(preflight=fail_preflight),tempfile.TemporaryDirectory() as root:
+                network=Network(root)
+                try:
+                    existing=network.command('RECORD',device_id='synthetic',app_id='dev.finsec.qa.network')
+                    run,engine,_=ReplayTests().make_replay(root);run.network=network
+                    if fail_preflight:run.preflight=Mock(side_effect=RuntimeError('synthetic preflight failure'))
+                    with self.assertRaises(RuntimeError):run.replay({'recording_id':'synthetic-source'})
+                    self.assertEqual(network.command('STATUS')['active_recording']['recording_id'],existing['recording_id'])
+                    run.input_replay.assert_not_called()
+                    self.assertTrue(run.link['network_not_started'])
+                    self.assertFalse(run.stop_attempted)
+                finally:network.close()

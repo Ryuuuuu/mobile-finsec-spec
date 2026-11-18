@@ -63,3 +63,14 @@ Actual GUI HTTPS: one canvas click recorded, then the saved route replayed after
 ## Reverse ownership follow-up
 
 See [ADB reverse diagnosis and recovery](ADB-REVERSE-RECOVERY.md). The host ADB crash was confirmed; overlapping tcp:0 registrations are a strongly supported mechanism, not yet an isolated device reproduction. The GUI and standalone harness now share a lifetime device reservation and explicit verified reverse-port ownership. Device acceptance of this revision is pending phone authorization.
+
+## Start-failure cleanup ownership (2026-11-18 local regression)
+
+A real local Network/Relay test reproduced an ownership defect: when an existing network recording was active, a new CombinedRun preflight failure or a `recording_busy` rejection still entered abort cleanup and sent an unscoped STOP, ending that existing recording. Both cases failed before the fix. This was synthetic loopback reproduction, not a device observation.
+
+CombinedRun now tracks whether its RECORD was attempted. A preflight/input preparation failure before dispatch skips network STOP. The Network adapter exposes `NetworkStartRejected` only for a confirmed `recording_busy` response with no applied/state-may-have-changed marker; that path also skips STOP. The saved partial link records `network_not_started`, and the journal records `network_stop_skipped_not_started`. Record and replay use the same start helper. Input is not enabled on these failures, and replay is never dispatched.
+
+Unknown exceptions/timeouts and storage acknowledgements are not converted to definite rejection. Existing uncertain-start compensation and no-repeat-after-uncertain-STOP behavior remain. This does not establish multi-client ownership: the current STOP API has no expected recording ID or fencing token. Safely sharing a relay among independent owners would require a scoped STOP/idempotent-start reconciliation protocol; do not infer that arbitrary concurrent clients are supported from this fix.
+
+Tests run actual P1 Network/P2 Relay plus a fake input engine, covering both preflight failure and busy rejection for record and replay. Existing network recording identity remains active until the test owner explicitly closes its network. The first attempted test interpreter lacked Pillow (P4 structural venv); no packages were installed. Tests were rerun in the already provisioned P1 venv. No window, device, model or inspection skill was exercised.
+Validation: P1 test_combined.py 21/21 passed (1.634s); active P4 structural runner 132/132 passed, zero skips (29.236s), including real P1/P2 handoff and lost-STOP tests.

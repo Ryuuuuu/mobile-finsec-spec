@@ -2,7 +2,7 @@
 import argparse,asyncio,pathlib,sys,threading,uuid,re,ssl,hashlib,base64,subprocess,tkinter as tk
 from tkinter import messagebox,ttk
 from .mirror import MirrorWindow
-from .combined import CombinedRun
+from .combined import CombinedRun,NetworkStartRejected
 
 class Network:
     def __init__(self,output,pki=None,websocket=False):
@@ -58,6 +58,9 @@ class Network:
         self.port=result['result']['listen_port']
     def command(self,name,**extra):
         result=asyncio.run_coroutine_threadsafe(self.relay.command(dict(schema_version=1,command_id=uuid.uuid4().hex,command=name,**extra)),self.loop).result(15)
+        if (name=='RECORD' and not result['ok'] and result.get('error')=='recording_busy'
+                and not result.get('applied') and not result.get('state_may_have_changed')):
+            raise NetworkStartRejected('Network RECORD rejected: recording_busy')
         if not result['ok']:raise RuntimeError('Network command failed: '+str(result.get('error')))
         return result['result']
     def close(self):
