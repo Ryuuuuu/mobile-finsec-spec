@@ -88,3 +88,16 @@ Actual separate Python process tests start with no records, publish a bundle aft
 This is a synchronous bounded POC scan: large directories/payload hashing latency, asynchronous worker offload, caching, filesystem notifications, background refresh during long-running work and race-proof filesystem ownership are not validated. Production must keep disk work away from the Rust render thread and avoid starving Python control/cancel processing. The implemented explicit refresh supersedes the earlier startup-only discovery limitation; automatic publisher notifications remain absent.
 Refresh follow-up validation: private-pipe recording tests 7/7 passed; full structural runner 132/132 passed, zero skips (23.294 seconds), Windows/Python 3.12.10.
 Follow-up ownership regression: actual P1 Network/Relay tests found and fixed abort STOP after preflight failure or confirmed recording_busy rejection; see ../../p1-record-replay/docs/COMBINED-RECORDING.md. Unknown-start compensation is unchanged; scoped STOP for independent clients remains a design gap.
+
+## Relay shutdown and persistence failures across the handoff
+
+Existing P2 tests already covered abrupt child-process termination, interrupted-record recovery, capture-write failure and command journal errors. The added integration tests therefore target propagation through actual P1 CombinedRun and the P4 reader/grants rather than duplicating those unit scenarios.
+
+1. Relay closure before P1 STOP: orderly `Relay.close()` seals its packets, but P1 did not finish its own input barrier. Its later STOP fails, input/combined state remains partial and is never promoted from the complete packet state. This is a lifecycle surprise to P1, not a simulated process kill.
+2. Injected SQLite failure during STOP packet finalization: P1 records uncertainty/incomplete input without retrying STOP. A new P2 Relay instance recovers the persisted unfinished row as interrupted/partial with a process_interrupted gap; already committed synthetic packet bytes remain accessible through P4. The gap is P2's recovery classification, not evidence of a literal OS crash in this test.
+3. Injected command-journal failure after packet seal: packets legitimately remain complete, but P1 input/combined status stays partial and the mock executor sees both distinct states. Structural executor completion never means complete capture.
+
+The first scenario exposed a real lifecycle defect: a command after Relay.close queried command history, reopening the closed WAL-mode database and leaving sidecars which made P4 report unsealed storage. The relay now rejects commands with relay_closed under the command/close lock before querying storage, including STATUS after closure. A direct test guards against any command-history access and checks that no WAL reappears. Reopening requires a new Relay instance, not ON against the closed instance.
+
+These tests inject SQLite exceptions at real persistence methods; they do not exhaust the physical disk, simulate torn filesystem writes, or prove power-loss durability. Existing real P2 process-kill tests remain separate evidence. No device, model, GUI or inspection skill is involved.
+Shutdown/storage follow-up validation: actual-code handoff tests 16/16 PASS (5.856s), P2 relay 40/40 PASS (10.880s), full structural runner 136/136 PASS zero skips (24.637s), Windows/Python 3.12.10.

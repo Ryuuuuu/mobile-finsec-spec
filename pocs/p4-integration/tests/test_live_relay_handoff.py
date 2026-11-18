@@ -71,6 +71,58 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
     def read_files(self,files):
         return read_artifacts(link_path=files['link'],route_path=files['route'],db_path=files['packets'])
 
+    async def prepare_capture(self):
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        await self.request('/normal')
+        await self.relay.queue.join()
+        self.files=dict(link=self.engine.j.path/'combined-link.json',
+                        route=self.engine.j.path/'route.json',packets=self.db)
+
+    def assert_partial_input(self):
+        self.assertEqual(self.stop_calls,1)
+        self.assertEqual(self.combined.state,'partial')
+        self.assertEqual(self.engine.record['status'],'incomplete')
+        self.assertTrue(self.combined.link['network_stop_uncertain'])
+
+    async def test_relay_closed_before_input_stop_does_not_complete_input(self):
+        await self.prepare_capture()
+        await self.relay.close()  # Unexpected by P1, but orderly relay shutdown (not a kill).
+        with self.assertRaises(RuntimeError):await asyncio.to_thread(self.combined.finish)
+        self.assert_partial_input()
+        self.assertEqual(self.read_files(self.files)[0]['packet_status'],'complete')
+        summary=await self.handoff()
+        self.assertEqual(summary['route_status'],'partial')
+        self.assertEqual(summary['packet_status'],'complete')  # Relay shutdown did seal packet storage.
+
+    async def test_stop_storage_failure_recovers_as_partial_without_losing_packet(self):
+        await self.prepare_capture()
+        with patch.object(self.relay.store,'_finalize_packets',side_effect=sqlite3.OperationalError('synthetic disk write failure')):
+            with self.assertRaises(RuntimeError):await asyncio.to_thread(self.combined.finish)
+        self.assert_partial_input()
+        await self.relay.close()
+        # Existing P2 restart recovery must interpret persisted recording/stopping as interrupted.
+        recovered=Relay(Config(db=self.db,upstream_port=self.up.port))
+        await recovered.start()
+        try:
+            rows=p2_fixture.query(self.db)['result']
+            self.assertEqual(rows[0]['status'],'interrupted')
+            self.assertEqual(rows[0]['network_coverage'],'partial')
+            self.assertTrue(any(g['reason']=='process_interrupted' for g in rows[0]['gaps']))
+        finally:await recovered.close()
+        summary=await self.handoff()
+        self.assertEqual(summary['route_status'],'partial');self.assertEqual(summary['packet_status'],'partial')
+
+    async def test_stop_journal_failure_never_promotes_partial_input(self):
+        await self.prepare_capture()
+        with patch.object(self.relay.store,'_command_save',side_effect=sqlite3.OperationalError('synthetic command journal failure')):
+            with self.assertRaises(RuntimeError):await asyncio.to_thread(self.combined.finish)
+        self.assert_partial_input()
+        await self.relay.close()
+        summary=await self.handoff()
+        self.assertEqual(summary['route_status'],'partial')
+        self.assertEqual(summary['packet_status'],'complete')  # Packet seal committed before command journal failed.
+
     async def test_start_timeout_then_late_dispatch_cannot_create_recording(self):
         release=asyncio.Event();futures=[];network=self.combined.network;test=self
         class DelayedNetwork:

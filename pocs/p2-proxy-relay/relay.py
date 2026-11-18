@@ -677,6 +677,7 @@ class Relay:
             return envelope(error='invalid_target')
         digest = hashlib.sha256(json.dumps(payload, sort_keys=True, separators=(',', ':')).encode()).hexdigest()
         async with self.command_lock:
+            if self.closed:return envelope(error='relay_closed')
             if cmd == 'STATUS':
                 return envelope(self.status())  # query, not an idempotent mutation
             try:

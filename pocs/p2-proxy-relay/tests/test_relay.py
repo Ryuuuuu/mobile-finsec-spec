@@ -166,6 +166,16 @@ class RelayAcceptanceTests(unittest.IsolatedAsyncioTestCase):
         result=await self.ok_command('STOP',expected_recording_id='qa-never-started')
         self.assertEqual(result['status'],'idle');self.assertFalse(result['scope_matched'])
 
+    async def test_closed_relay_commands_do_not_reopen_storage(self):
+        await self.ok_command('ON');await self.record()
+        await self.relay.close()
+        def forbidden(*args):raise AssertionError('closed store must not be queried')
+        self.relay.store._command_get=forbidden
+        for operation in ('STOP','STATUS','ON'):
+            reply=await self.command(operation)
+            self.assertFalse(reply['ok']);self.assertEqual(reply['error'],'relay_closed')
+        self.assertFalse(Path(str(self.db)+'-wal').exists())
+
     async def test_stop_before_delayed_record_survives_restart(self):
         await self.ok_command('ON')
         release=asyncio.Event()
