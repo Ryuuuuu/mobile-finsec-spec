@@ -12,6 +12,7 @@ from integration.artifact_reader import read_artifacts
 from integration.structure_supervisor import StructureSupervisor
 from integration.packet_access import PacketGrant
 from integration import recording_snapshot
+from integration import recording_bundle
 
 
 def load(name,path):
@@ -69,6 +70,55 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
 
     def read_files(self,files):
         return read_artifacts(link_path=files['link'],route_path=files['route'],db_path=files['packets'])
+
+    async def test_bundle_selects_one_record_and_detaches_sources(self):
+        await self.capture('/normal',seal=False);first=dict(self.files)
+        await self.capture('/second',b'QA OTHER',seal=False)
+        bundles=self.root/'bundles';bundles.mkdir()
+        self.files=await asyncio.to_thread(recording_bundle.publish_bundle,
+                                          first['link'],first['route'],self.db,bundles)
+        manifest=json.loads((self.files['link'].parent/'manifest.json').read_text())
+        summary,_=self.read_files(self.files)
+        self.assertEqual(manifest['recording_id'],summary['recording_id'])
+        self.assertEqual(manifest['network_recording_id'],json.loads(first['link'].read_text())['network_recording_id'])
+        self.assertEqual(summary['packet_count'],1)
+        first['route'].write_text('source replaced',encoding='utf-8')
+        self.assertEqual((await self.handoff())['packet_status'],'complete')
+        self.assertEqual(len(list(bundles.iterdir())),1)
+        self.assertEqual(self.relay.relay_state,'on')
+
+    async def test_bundle_partial_state_and_foreign_route_rejection(self):
+        await self.capture('/normal',seal=False);first=dict(self.files)
+        await self.capture('/short-response',seal=False);second=dict(self.files)
+        bundles=self.root/'bundles';bundles.mkdir()
+        with self.assertRaisesRegex(ValueError,'BUNDLE_INVALID_ARTIFACTS'):
+            await asyncio.to_thread(recording_bundle.publish_bundle,first['link'],second['route'],self.db,bundles)
+        self.assertEqual(list(bundles.iterdir()),[])
+        self.files=await asyncio.to_thread(recording_bundle.publish_bundle,
+                                          second['link'],second['route'],self.db,bundles)
+        self.assertEqual((await self.handoff())['packet_status'],'partial')
+
+    async def test_bundle_source_change_and_export_failure_publish_nothing(self):
+        await self.capture('/normal',seal=False)
+        bundles=self.root/'bundles';bundles.mkdir();original=recording_bundle.export_recording
+        def changed(*args):
+            result=original(*args)
+            with self.files['route'].open('ab') as stream:stream.write(b' ')
+            return result
+        with patch.object(recording_bundle,'export_recording',changed):
+            with self.assertRaisesRegex(ValueError,'BUNDLE_SOURCE_CHANGED'):
+                await asyncio.to_thread(recording_bundle.publish_bundle,
+                                        self.files['link'],self.files['route'],self.db,bundles)
+        self.assertEqual(list(bundles.iterdir()),[])
+        def failed(*args):
+            original(*args)
+            raise OSError('synthetic publication failure')
+        with patch.object(recording_bundle,'export_recording',failed):
+            with self.assertRaises(OSError):
+                await asyncio.to_thread(recording_bundle.publish_bundle,
+                                        self.files['link'],self.files['route'],self.db,bundles)
+        self.assertEqual(list(bundles.iterdir()),[])
+        await self.request('/still-on')
 
     async def test_snapshot_while_second_recording_commits(self):
         await self.capture('/normal',seal=False)
