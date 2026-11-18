@@ -178,3 +178,33 @@ change adds regression coverage and clarifies the recovery contract only.
 
 Reproduce from P1: `python -m unittest discover -s tests -p test_lease_process.py -v`.
 No device, model, inspection skill, installation or permission change was involved.
+
+## Replay evidence binding when result persistence fails
+
+A combined exception path lost the replay identity: Engine created a replay
+journal and dispatched its action, but an injected result.json write failure
+prevented input_replay from returning its run ID. CombinedRun then saved only the
+source recording ID and network ID, leaving the new replay journal unlinked.
+The integration reproduction also closes the actual relay after its request was
+forwarded; cleanup STOP is uncertain even though that orderly relay shutdown
+already sealed the packet evidence.
+
+CombinedRun now remembers the prior journal and, on an input_replay exception,
+binds only a newly created journal of kind replay. The partial link records
+input_status=incomplete and input_result_unavailable=true, including a link beside
+the new replay evidence when storage permits. It never substitutes the previous
+journal, overwrites the source route, fabricates a missing result.json or retries
+the input/STOP. The marker describes unavailable final input evidence; it does not
+assert that every dispatched action failed. Existing event records are retained.
+
+The real-code regression checks source bytes unchanged, new journal linked,
+missing result file still absent, retained finished event and one replay packet,
+partial/uncertain STOP state and exactly one replay STOP attempt. A separate mock
+boundary verifies failure before journal creation leaves a previous replay link
+unchanged. Controlled persistence failure plus orderly proxy shutdown is not a
+power-loss/disk-full claim. If all persistence fails, durable linkage cannot be
+guaranteed. P4 replay-result import remains unsupported; this adds no replay
+assessment or automatic recovery. No device, installation or inspection skill
+is exercised.
+
+Replay evidence follow-up validation: P1 combined 32/32 PASS (3.663s), structure-only 154/154 PASS zero skips (32.556s).

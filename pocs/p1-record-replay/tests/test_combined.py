@@ -99,6 +99,17 @@ class ReplayTests(CombinedTests):
             self.assertEqual(run.link['input_status'],'succeeded')
             self.assertEqual(engine.record['status'],'completed')
             self.assertEqual([c.args[0] for c in network.command.call_args_list].count('STOP'),1)
+    def test_replay_failure_before_new_journal_does_not_link_previous_run(self):
+        with tempfile.TemporaryDirectory() as root:
+            run,engine,network=self.make_replay(root)
+            previous=Journal(root,'replay');engine.j=previous
+            path=previous.path/'combined-link.json';atomic(path,{'prior':'synthetic'})
+            saved=path.read_bytes();run.input_replay=Mock(side_effect=ValueError('synthetic pre-journal failure'))
+            with self.assertRaises(ValueError):run.replay({'recording_id':'source'})
+            self.assertNotIn('input_recording_id',run.link)
+            self.assertEqual(path.read_bytes(),saved)
+            self.assertEqual([c.args[0] for c in network.command.call_args_list],['RECORD','STOP'])
+
     def test_replay_input_failure_still_stops_network(self):
         with tempfile.TemporaryDirectory() as root:
             run,engine,network=self.make_replay(root,status='failed')

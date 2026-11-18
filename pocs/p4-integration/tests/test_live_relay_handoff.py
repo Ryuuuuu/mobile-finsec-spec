@@ -168,6 +168,38 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(source.read_bytes(),saved)
         self.assertIsNone(self.relay.active_recording)
 
+    async def test_replay_result_write_failure_retains_new_run_link_after_proxy_close(self):
+        await self.capture('/normal',seal=False)
+        source=self.files['route'];saved=source.read_bytes();route=json.loads(saved)
+        self.engine.a=p1_fixture.Fake();click=self.engine.a.click;test=self
+        def network_click(element):
+            click(element)
+            asyncio.run_coroutine_threadsafe(test.request('/replay-before-close'),test.loop).result(3)
+            asyncio.run_coroutine_threadsafe(test.relay.close(),test.loop).result(3)
+        self.engine.a.click=network_click
+        from pc import core
+        original=core.atomic
+        def write(path,value):
+            if Path(path).name=='result.json':raise OSError('synthetic replay result write failure')
+            return original(path,value)
+        with patch.object(core,'atomic',write):
+            with self.assertRaises(OSError):await asyncio.to_thread(self.combined.replay,route)
+        replay=self.engine.j
+        self.assertNotEqual(replay.id,route['recording_id'])
+        self.assertEqual(self.combined.link.get('input_recording_id'),replay.id)
+        link=json.loads((replay.path/'combined-link.json').read_text())
+        self.assertEqual(link['status'],'partial');self.assertEqual(link['input_status'],'incomplete')
+        self.assertTrue(link['network_stop_uncertain'])
+        self.assertEqual(source.read_bytes(),saved)
+        self.assertFalse((replay.path/'result.json').exists())
+        self.assertIn('finished',(replay.path/'events.jsonl').read_text())
+        records=p2_fixture.query(self.db)['result']
+        retained=next(row for row in records if row['recording_id']==link['network_recording_id'])
+        self.assertEqual(retained['network_coverage'],'complete_for_supported_scope')
+        packets=p2_fixture.query(self.db,kind='packets',recording_id=retained['recording_id'])['result']
+        self.assertEqual(len(packets),1)
+        self.assertEqual(self.stop_calls,2)  # Source STOP plus one uncertain replay STOP, never retry.
+
     async def test_relay_closed_before_input_stop_does_not_complete_input(self):
         await self.prepare_capture()
         await self.relay.close()  # Unexpected by P1, but orderly relay shutdown (not a kill).

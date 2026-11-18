@@ -70,7 +70,15 @@ class CombinedRun:
             self.j.write('network_start_ack',recording_id=result['recording_id'])
             if self.engine.cancel.is_set():raise InterruptedError('STOP requested during start barrier')
             self.state='replaying';self.j.write('input_enabled');self.save()
-            result=self.input_replay(route)
+            previous_journal=self.engine.j
+            try:result=self.input_replay(route)
+            except Exception:
+                # Engine may create evidence but fail to persist/return its result.
+                # Bind only a newly created replay journal, never the source run.
+                journal=self.engine.j
+                if journal is not None and journal is not previous_journal and journal.kind=='replay':
+                    self.link.update(input_recording_id=journal.id,input_status='incomplete',input_result_unavailable=True)
+                raise
             self.link['input_recording_id']=result['run_id'];self.link['input_status']=result['status']
             self.state='stopping';self.j.write('input_closed');self.save();self.stop_attempted=True
             stopped=self.stop_network();self.link['network_stop']=stopped
