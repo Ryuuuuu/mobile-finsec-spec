@@ -29,7 +29,7 @@ class StructureSupervisor:
         self.survivors=set()
 
     async def run(self, items, platform=None, timeout=0.2, progress_timeout=0.1,
-                  recording_id=None, recordings=None, artifact_files=None, mock_outcomes=None):
+                  recording_id=None, recordings=None, artifact_files=None, mock_outcomes=None, availability=None):
         if (not isinstance(items,list) or not 1<=len(items)<=10
                 or not all(isinstance(x,str) for x in items) or len(set(items))!=len(items)
                 or platform not in (None,'aos','ios')):raise ValueError('INVALID_PLAN')
@@ -63,6 +63,8 @@ class StructureSupervisor:
                 result['reason']='DEVICE_BUSY_OR_RECOVERY';return result
             if token is None:
                 result['reason']='DEVICE_BUSY_OR_RECOVERY';return result
+            if availability is not None and not availability():
+                result['reason']='PRECONDITION_CHANGED';return result
             snapshots=[]
             for index,item in enumerate(items):
                 try:snapshots.append(load_skills(self.skills,item,platform))
@@ -71,6 +73,9 @@ class StructureSupervisor:
                     result['reason']='PREFLIGHT_FAILED';return result
             result['execution_status']='running'
             for index,item in enumerate(items):
+                if availability is not None and not availability():
+                    rows[index]['reason']='PRECONDITION_CHANGED'
+                    result['execution_status']='failed';break
                 current=index
                 token=self.lease.activate_attempt(token,'synthetic-'+uuid4().hex)
                 self.lease.authorize(token,'mock.execute')
@@ -93,12 +98,14 @@ class StructureSupervisor:
                 failure=None
                 while not active.done():
                     await asyncio.wait({active},timeout=0.005)
+                    if availability is not None and not availability():failure='PRECONDITION_CHANGED';break
                     now=time.monotonic()
                     if not active.done() and now-started>=timeout:failure='ITEM_TIMEOUT';break
                     if not active.done() and now-last_progress>=progress_timeout:failure='PROGRESS_TIMEOUT';break
                 if failure:
-                    rows[index].update(execution_status='timed_out',reason=failure)
-                    result['execution_status']='timed_out';break
+                    state='failed' if failure=='PRECONDITION_CHANGED' else 'timed_out'
+                    rows[index].update(execution_status=state,reason=failure)
+                    result['execution_status']=state;break
                 try:reply=active.result()
                 except asyncio.CancelledError:reply=None
                 except Exception:

@@ -161,3 +161,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 [On-demand packet bytes](docs/PACKET-ACCESS.md) adds scoped, revocable mock-agent access to synthetic P2 request/response BLOBs with independent completeness and truncation states.
 
 [Live logs and final history](docs/RUN-HISTORY.md) separate execution lifecycle from sealed result storage and list multiple UTC-dated runs. Assessment labels are fixed test values only.
+
+[Start/preflight API](docs/START-PREFLIGHT.md) validates mock device/item selection and prerequisites independently of models, with disabled reasons, command deduplication and disconnect checks.

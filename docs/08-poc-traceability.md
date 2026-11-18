@@ -174,3 +174,7 @@ The user authors assessment skills/tools with skill-creator. Stop check-content/
 ### Structural live/final history
 
 [Run log/history contract](../pocs/p4-integration/docs/RUN-HISTORY.md) separates live lifecycle events from sealed final records, lists UTC-dated runs, and preserves cancellation/error/partial completion. 72 structural tests passed. Mock labels/reasons are fixed fixtures, not check implementations or real security conclusions.
+
+### Mock device/item preflight and start API
+
+[Model-independent start contract](../pocs/p4-integration/docs/START-PREFLIGHT.md) validates selected mock device/platform/items, exposes prerequisite-disabled reasons, deduplicates commands and rechecks availability after admission and during execution. No actual device capability, root state or judgement skill is implemented.
