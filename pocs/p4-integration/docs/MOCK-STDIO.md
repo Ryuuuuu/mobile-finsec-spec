@@ -41,3 +41,13 @@ Four additional actual-process tests passed: (1) identical and changed command p
 The reference client discards child stderr rather than exposing arbitrary diagnostics; future product logging needs its own bounded private log channel. Concurrency rejection is implemented but not independently stressed. Real Rust IPC, GPUI dispatch, arbitrary external tools, descendant-process cleanup, authenticated network transport and a fully asynchronous production client remain unverified. Tests use no inspection content, credentials, device or model.
 
 Full structural regression after the client addition: 101 tests passed, zero skips.
+
+## Cleanup confirmation and retry
+
+Review found that the old close method set closed before attempting process termination. An OS error could therefore leave a live owned child while subsequent close calls did nothing. The reference client now marks closed only after confirming process exit, joining the pipe IO thread and closing handles. It returns a structured cleanup result with forced/exit_code, or cleanup_unconfirmed with a fixed reason. This is a process/pipe status, not an execution verdict or proof that external descendants/resources were cleaned.
+
+Every close attempt disables new exchanges immediately. If cleanup fails, the client remains unusable for work but retains its process/pipe handles for explicit cleanup retry. Successful close is idempotent. Startup handshake failure also attaches cleanup_client to the raised exception if automatic cleanup could not be confirmed, allowing the launcher to retain and retry cleanup rather than losing ownership. Concurrent cleanup calls report CLEANUP_IN_PROGRESS; this branch is not stress-tested.
+
+Four tests use actual local Python children: normal EOF/exit code 0 and repeated close; EOF-ignoring child terminated after deadline; an injected kill OSError while a real child remains alive followed by successful retry; and invalid startup handshake plus injected kill failure, with retained handle and later successful cleanup. The kill error is a controlled fault injection, not a reproduced Windows permission failure. All owned test children were subsequently terminated. No actual external tool, process tree, device, security setting or inspection skill was involved.
+
+Cleanup follow-up regression: 105 structural tests passed, zero skips.
