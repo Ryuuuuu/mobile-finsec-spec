@@ -45,8 +45,9 @@ class CombinedRun:
             self.engine.stop_requested();self.engine.mode='incomplete';self.abort('Start barrier failed');raise
     def finish(self):
         if self.state!='active':raise RuntimeError('Combined recording not active')
-        self.state='stopping';self.j.write('input_closed');self.save()
+        self.state='stopping'
         try:
+            self.j.write('input_closed');self.save()
             self.stop_attempted=True
             result=self.stop_network();self.link['network_stop']=result
             self.j.write('network_stop_ack',coverage=result.get('network_coverage'))
@@ -84,18 +85,27 @@ class CombinedRun:
         except Exception:
             self.engine.stop_requested();self.engine.mode='incomplete';self.abort('Replay barrier failed');raise
     def abort(self,reason):
-        if not self.j or self.terminated or self.state in ('idle','completed'):return
-        self.state='partial';self.j.write('gap',reason=reason)
-        try:
-            if not self.network_start_attempted:
-                self.link['network_not_started']=True;self.j.write('network_stop_skipped_not_started')
-            else:
-                if self.stop_attempted:raise TimeoutError('STOP outcome remains uncertain; no automatic retry')
+        if not self.j or self.terminated or self.state=='idle':return
+        self.state='partial';self.engine.stop_requested();self.engine.mode='incomplete';errors=[]
+        def persist(operation):
+            try:operation()
+            except OSError as error:
+                errors.append(error);self.link['storage_incomplete']=True
+        persist(lambda:self.j.write('gap',reason=reason))
+        if not self.network_start_attempted:
+            self.link['network_not_started']=True
+            persist(lambda:self.j.write('network_stop_skipped_not_started'))
+        else:
+            if not self.stop_attempted:
                 self.stop_attempted=True
-                self.link['network_stop']=self.stop_network()
-                self.j.write('network_abort_stop_ack')
-        except Exception:
-            self.link['network_stop_uncertain']=True;self.j.write('network_stop_uncertain')
+                try:self.link['network_stop']=self.stop_network()
+                except Exception:self.link['network_stop_uncertain']=True
+            elif 'network_stop' not in self.link:
+                self.link['network_stop_uncertain']=True
+            event='network_stop_uncertain' if self.link.get('network_stop_uncertain') else 'network_abort_stop_ack'
+            persist(lambda:self.j.write(event))
         if self.link.get('kind')!='replay' and hasattr(self.engine,'record') and self.engine.j and self.engine.j.id==self.link.get('input_recording_id'):
-            self.engine.record['status']='incomplete';atomic(self.engine.j.path/'route.json',self.engine.record)
-        self.save();self.terminated=True
+            self.engine.record['status']='incomplete'
+            persist(lambda:atomic(self.engine.j.path/'route.json',self.engine.record))
+        persist(self.save);self.terminated=True
+        if errors:raise errors[0]

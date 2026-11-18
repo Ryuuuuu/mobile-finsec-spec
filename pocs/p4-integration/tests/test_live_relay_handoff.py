@@ -85,6 +85,65 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(self.engine.record['status'],'incomplete')
         self.assertTrue(self.combined.link['network_stop_uncertain'])
 
+    async def test_abort_journal_failure_still_stops_owned_recording(self):
+        await self.prepare_capture()
+        with patch.object(self.combined.j,'write',side_effect=OSError('synthetic combined journal full')):
+            with self.assertRaises(OSError):await asyncio.to_thread(self.combined.abort,'synthetic input failure')
+        self.assertIsNone(self.relay.active_recording)
+        self.assertEqual(self.stop_calls,1)
+        self.assertEqual(self.engine.record['status'],'incomplete')
+        self.assertTrue(self.combined.link['storage_incomplete'])
+        self.assertNotIn('network_stop_uncertain',self.combined.link)
+        await asyncio.to_thread(self.combined.abort,'duplicate cleanup')
+        self.assertEqual(self.stop_calls,1)
+        await self.relay.close()
+        summary=await self.handoff()
+        self.assertEqual(summary['route_status'],'partial');self.assertEqual(summary['packet_status'],'complete')
+
+    async def failed_input_handoff(self,mode):
+        await self.prepare_capture();click=self.engine.a.click;test=self
+        def dispatch(element):
+            click(element)
+            asyncio.run_coroutine_threadsafe(test.request('/failed-input',b'QA FAILED INPUT'),test.loop).result(3)
+            if mode=='cancel':test.engine.stop_requested()
+            if mode=='disconnect':raise p1_fixture.Uncertain('synthetic transport outcome unknown')
+        self.engine.a.click=dispatch
+        original=self.engine.j.write
+        def write(event,**data):
+            if event=='result' and mode=='storage':raise OSError('synthetic action result write failure')
+            return original(event,**data)
+        with patch.object(self.engine.j,'write',write):
+            with self.assertRaises((InterruptedError,p1_fixture.Uncertain,OSError)):
+                await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        await asyncio.to_thread(self.combined.abort,'input incomplete')
+        self.assertEqual(len(self.engine.record['actions']),1)
+        self.assertEqual(len(self.engine.a.inputs),2)  # One acknowledged initial action, one failed/uncertain action.
+        await self.relay.close()
+        summary=await self.handoff()
+        self.assertEqual(summary['route_status'],'partial');self.assertEqual(summary['packet_status'],'complete')
+        self.assertEqual(summary['packet_count'],2)
+        self.assertEqual(self.stop_calls,1)
+
+    async def test_input_cancel_keeps_emitted_packet_but_partial_route(self):
+        await self.failed_input_handoff('cancel')
+
+    async def test_input_disconnect_keeps_emitted_packet_but_partial_route(self):
+        await self.failed_input_handoff('disconnect')
+
+    async def test_input_result_write_failure_keeps_packet_but_partial_route(self):
+        await self.failed_input_handoff('storage')
+
+    async def test_finish_journal_failure_does_not_skip_network_cleanup(self):
+        await self.prepare_capture()
+        original=self.combined.j.write
+        def write(event,**data):
+            if event=='input_closed':raise OSError('synthetic stop barrier journal failure')
+            return original(event,**data)
+        with patch.object(self.combined.j,'write',write):
+            with self.assertRaises(OSError):await asyncio.to_thread(self.combined.finish)
+        self.assertIsNone(self.relay.active_recording);self.assertEqual(self.stop_calls,1)
+        self.assertEqual(self.engine.record['status'],'incomplete')
+
     async def test_cancel_during_replay_stop_keeps_input_success_but_combined_partial(self):
         await self.capture('/normal',seal=False)
         source=self.files['route'];saved=source.read_bytes();route=json.loads(saved)
