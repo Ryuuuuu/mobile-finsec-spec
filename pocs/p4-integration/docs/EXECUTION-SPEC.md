@@ -155,3 +155,7 @@ so ordinary P2 startup does not consume its deadline before the selected item ru
 The deliberately stalled tool still exceeds that deadline; production defaults are
 unchanged. Outside-run path rejection and privilege-dependent real symlink rejection
 are separate tests so unavailable Windows symlink privilege does not mask path checks.
+
+## Provider RPC boundary follow-up
+
+Provider start/result awaits are tracked and bounded by existing tool/run/item deadlines. Role/phase-specific stop codes and lifecycle events are persisted. Uncertain start failure retains recovery rather than retrying ambiguous admission. No automatic retry or real-provider support is introduced. See [provider audit](PROVIDER-BOUNDARY-AUDIT.md) for confirmed defects, retry policy and remaining adapter isolation work.

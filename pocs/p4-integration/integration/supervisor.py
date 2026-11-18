@@ -159,6 +159,24 @@ class Supervisor:
                     continue
                 self._emit(h, 'provider_event', event, item=item, source='fake_provider')
 
+    async def _provider_call(self, h, role, phase, operation, item, item_started):
+        # Track the RPC itself: a provider can stall before returning a job or result.
+        future = asyncio.create_task(operation)
+        h.resources.append(future)
+        self._emit(h, 'provider_call_started', {'role': role, 'phase': phase}, item=item)
+        try:
+            result = await self._watch(h, future, role.upper() + '_' + phase.upper(),
+                                       item_started=item_started)
+        except StopRun as exc:
+            code = role.upper() + '_' + phase.upper() + '_TIMEOUT' if exc.code == 'TOOL_TIMEOUT' else exc.code
+            self._emit(h, 'provider_call_stopped', {'role': role, 'phase': phase,
+                       'reason_code': code}, item=item)
+            # Failed admission may have created work without returning its handle.
+            # A retry could duplicate it; keep the lease blocked for explicit recovery.
+            raise StopRun(code, exc.status, recovery=phase == 'start' or exc.recovery) from exc
+        self._emit(h, 'provider_call_finished', {'role': role, 'phase': phase}, item=item)
+        return result
+
     async def _provider(self, h, role, behavior, item=None, item_started=None):
         self._check(h, item_started)
         provider = self.provider_factory(behavior=behavior, name=h.plan.provider_name,
@@ -171,14 +189,16 @@ class Supervisor:
         context = {'role': role, 'selected_items': [i.item_id for i in h.plan.items]}
         if item:
             context.update(item_id=item.item_id, variant=item.variant)
-        job = await provider.start_job(context, ('p3.check',) if item else ())
+        job = await self._provider_call(h, role, 'start',
+            provider.start_job(context, ('p3.check',) if item else ()), item, item_started)
         h.providers.append((provider, job))
         h.resources.append(job.task)
         h.streams.append(asyncio.create_task(self._stream(h, provider, job, item, h.token)))
         self._emit(h, 'provider_started', {'role': role, 'job_id': job.job_id,
                    'capabilities': caps}, item=item, source='fake_provider')
         await self._watch(h, job.task, role.upper(), job=job, item_started=item_started)
-        result = await provider.get_result(job.job_id)
+        result = await self._provider_call(h, role, 'result',
+            provider.get_result(job.job_id), item, item_started)
         if result is None:
             raise StopRun(role.upper() + '_EXIT')
         return result
