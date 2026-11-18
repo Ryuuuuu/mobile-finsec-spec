@@ -36,3 +36,23 @@ The five focused tests passed on Windows/Python 3.12.10. These are actual local 
 
 Product integration constraint: the current P4 offline reader cannot consume a completed capture while the shared P2 writer remains open. A product that keeps the proxy running during inspection needs an explicitly sealed, consistent snapshot/export with recording identity and integrity metadata, or must stop/close the writer before handoff. A successful STOP must not be presented as packet-analysis readiness. Snapshot publication is not implemented or claimed by this POC; copying the live SQLite main file alone is not an acceptable substitute. The synthetic tests do not cover abrupt process termination, concurrent external database writers or packets racing exactly with command admission.
 Follow-up full regression: 121/121 structural tests passed, zero skips (18.868 seconds).
+
+## Selected-record snapshot POC (implemented follow-up)
+
+`integration.recording_snapshot.export_recording(source, destination, recording_id)` provides a trusted local worker-thread entry point. It opens the live source normally in SQLite read-only mode (not immutable), starts a read transaction, and accepts only a selected terminal recording (`completed`, `interrupted`, or `failed`). It creates a fresh v1 SQLite file containing only that recording and its packets, preserving metadata and BLOBs verbatim. It does not copy unrelated rows, command history or original SQLite free pages. After closing the new database, a same-directory hard link publishes the complete file without overwriting an existing destination. Unsupported hard links fail closed. The return descriptor carries the recording ID, size and SHA-256; the existing P4 reader and scoped packet grants consume the new file unchanged.
+
+This relies on [SQLite WAL snapshot isolation](https://www.sqlite.org/isolation.html): a read transaction sees committed state at its start while separate writers can commit. It is a filtered transactional export, not a main-file copy or a complete-database backup. The caller must resolve trusted paths and IDs from its registry and run it off the UI/event-loop thread. This function is not exposed as an untrusted HTTP operation.
+
+Bounds: at most 100 packets, 64 KiB metadata per row, 16 MiB output/page budget, default 5-second cooperative deadline (maximum 30 seconds), bounded SQLite busy wait. A read transaction can delay WAL checkpoint reclamation, so cancellation/deadline and storage quotas need product integration. The deadline is checked during copying and by SQLite's progress handler; it is not a hard OS deadline for stalled filesystem calls. Failure removes private temporary files; no output is published for active/missing records, size overflow or timeout. Existing output is never replaced. Filesystem crash durability, hostile path races/ACLs, low-disk failure, process-kill recovery and large-capture scale have not been established.
+
+Executed tests use the existing P1 engine and P2 relay:
+
+- A test barrier holds the export read transaction open while a second real recording receives a request and commits STOP. The first snapshot contains only the first recording and one packet; P4 mock handoff reads its bytes while the original relay remains on and forwards another request.
+- A real short upstream response remains partial through snapshot and P4 handoff.
+- An active recording is refused without disrupting capture; existing destination bytes are preserved.
+- A tiny size budget and injected copy delay beyond the deadline publish nothing and remove temporary files; the relay remains usable.
+
+The deterministic test barrier/delay are test instrumentation, not production scheduling or observed network faults. An initial test-only SQLite handle leak caused Windows temporary cleanup failure; explicit connection closure fixed it. No device, model, inspection skill or GPUI is exercised.
+
+The earlier continuous-proxy constraint is now addressed at the minimal Python export/handoff level. Automatic snapshot scheduling, UI readiness/progress/error events, registry ownership/retention, route/link bundle publication and native Rust/GPUI integration remain design work. A terminal database row does not certify complete collection: the unchanged P4 reader remains responsible for exposing partial/corrupt status. There is no atomicity claim across independently saved route/link and network files.
+Snapshot follow-up validation: focused tests 9/9 passed; full structural runner 125/125 passed, zero skips (20.044 seconds), Windows/Python 3.12.10.

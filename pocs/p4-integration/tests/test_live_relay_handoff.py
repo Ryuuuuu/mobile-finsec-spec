@@ -1,5 +1,7 @@
 """Real P1 engine/barriers + P2 loopback relay; device adapter alone is fake."""
-import asyncio,base64,importlib.util,json,tempfile,unittest
+import asyncio,base64,importlib.util,json,sqlite3,tempfile,threading,time,unittest
+from unittest.mock import patch
+from contextlib import closing
 from pathlib import Path
 from uuid import uuid4
 import test_artifact_reader as files_fixture  # Existing P1/P2 source-path setup.
@@ -9,6 +11,7 @@ from relay import Config,Relay
 from integration.artifact_reader import read_artifacts
 from integration.structure_supervisor import StructureSupervisor
 from integration.packet_access import PacketGrant
+from integration import recording_snapshot
 
 
 def load(name,path):
@@ -66,6 +69,73 @@ class LiveRelayHandoffTests(unittest.IsolatedAsyncioTestCase):
 
     def read_files(self,files):
         return read_artifacts(link_path=files['link'],route_path=files['route'],db_path=files['packets'])
+
+    async def test_snapshot_while_second_recording_commits(self):
+        await self.capture('/normal',seal=False)
+        first=dict(self.files);rid=self.combined.link['network_recording_id']
+        await asyncio.to_thread(self.combined.start)
+        await asyncio.to_thread(self.engine.record_action,p1_fixture.tap())
+        entered=threading.Event();release=threading.Event()
+        original=recording_snapshot._copy_packets
+        def paused(*args):
+            entered.set()
+            if not release.wait(3):raise TimeoutError('test barrier')
+            return original(*args)
+        output=self.root/'selected.sqlite'
+        with patch.object(recording_snapshot,'_copy_packets',paused):
+            task=asyncio.create_task(asyncio.to_thread(recording_snapshot.export_recording,self.db,output,rid))
+            try:
+                self.assertTrue(await asyncio.to_thread(entered.wait,2))
+                await self.request('/second',b'QA EXCLUDED SECOND')
+                await asyncio.to_thread(self.combined.finish)  # Real writes commit during source read transaction.
+            finally:release.set()
+            manifest=await task
+        self.assertEqual(manifest['recording_id'],rid)
+        self.assertEqual(self.relay.relay_state,'on');self.assertFalse(self.relay.closed)
+        with closing(sqlite3.connect(output)) as conn:
+            self.assertEqual(conn.execute('SELECT id FROM recordings').fetchall(),[(rid,)])
+            self.assertEqual(conn.execute('SELECT count(*) FROM packets').fetchone()[0],1)
+            self.assertNotIn(b'QA EXCLUDED SECOND',conn.execute('SELECT request FROM packets').fetchone()[0])
+        self.files=dict(first,packets=output)
+        self.assertEqual((await self.handoff())['packet_status'],'complete')
+        await self.request('/still-on',b'QA OUTSIDE')
+
+    async def test_snapshot_preserves_real_partial_capture(self):
+        await self.capture('/short-response',seal=False)
+        output=self.root/'partial.sqlite'
+        await asyncio.to_thread(recording_snapshot.export_recording,self.db,output,self.combined.link['network_recording_id'])
+        self.files['packets']=output
+        self.assertEqual((await self.handoff())['packet_status'],'partial')
+        self.assertEqual(self.relay.relay_state,'on')
+
+    async def test_snapshot_rejects_active_and_does_not_overwrite(self):
+        await asyncio.to_thread(self.combined.start)
+        rid=self.combined.link['network_recording_id'];output=self.root/'selected.sqlite'
+        with self.assertRaisesRegex(ValueError,'RECORDING_NOT_TERMINAL'):
+            await asyncio.to_thread(recording_snapshot.export_recording,self.db,output,rid)
+        self.assertFalse(output.exists())
+        self.assertEqual(list(self.root.glob('.snapshot-*')),[])
+        output.write_bytes(b'KEEP')
+        with self.assertRaises(FileExistsError):
+            await asyncio.to_thread(recording_snapshot.export_recording,self.db,output,rid)
+        self.assertEqual(output.read_bytes(),b'KEEP')
+        self.assertIsNotNone(self.relay.active_recording)
+        await asyncio.to_thread(self.combined.finish)
+
+    async def test_snapshot_limit_timeout_leave_no_published_file(self):
+        await self.capture('/normal',seal=False)
+        rid=self.combined.link['network_recording_id'];output=self.root/'selected.sqlite'
+        with self.assertRaisesRegex(ValueError,'SNAPSHOT_LIMIT'):
+            await asyncio.to_thread(recording_snapshot.export_recording,self.db,output,rid,max_bytes=1)
+        original=recording_snapshot._copy_packets
+        def delayed(*args):
+            time.sleep(.05)
+            return original(*args)
+        with patch.object(recording_snapshot,'_copy_packets',delayed):
+            with self.assertRaises((TimeoutError,sqlite3.OperationalError)):
+                await asyncio.to_thread(recording_snapshot.export_recording,self.db,output,rid,timeout=.03)
+        self.assertFalse(output.exists());self.assertEqual(list(self.root.glob('.snapshot-*')),[])
+        await self.request('/still-on')
 
     async def test_stop_ack_is_not_storage_seal(self):
         summary,payload=await self.capture('/normal',seal=False)
