@@ -154,3 +154,7 @@ S2 1.1은 UTF-16LE/BE 고정 샘플 표현 및 결과 이름 해시화를 추가
 ### Active scope change: structure only (2026-11-18)
 
 The user authors assessment skills/tools with skill-creator. Stop check-content/tool/verdict implementation and testing. [Current structural scope](../pocs/p4-integration/docs/STRUCTURE-ONLY-SCOPE.md) covers opaque common/platform skill delivery, sequential orchestration, exclusivity, liveness/error monitoring and provider adapters. Historical check-specific results remain historical; user skills are not validated by them.
+
+### Structural Supervisor separation
+
+[Active mock-only runner](../pocs/p4-integration/docs/STRUCTURAL-SUPERVISOR.md) now loads and delivers opaque common/AOS/iOS snapshots, runs items sequentially under a synthetic-device lease, and records missing/failed/timed_out/cancelled/completed separately. It does not import P3 judgement; legacy aliases are preserved only for historical paths. Real device/model execution remains unverified.

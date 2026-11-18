@@ -151,3 +151,5 @@ A separate [Ollama loopback HTTP preparation adapter](docs/OLLAMA-LOCAL-PREPARAT
 ## Active user scope
 
 [Structure-only scope](docs/STRUCTURE-ONLY-SCOPE.md) supersedes further check-content/verdict testing. User-authored skills and tools are outside current implementation scope. Use opaque mock skills and the selected structural tests; do not use the historical full suite as current acceptance.
+
+Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-only orchestration path. The historical Supervisor alias and demo CLI remain legacy P3-backed compatibility paths, outside current acceptance.

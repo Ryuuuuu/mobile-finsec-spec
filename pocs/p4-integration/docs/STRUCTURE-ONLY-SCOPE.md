@@ -21,3 +21,7 @@ Run `test_skill_structure.py`, `test_ollama_http.py`, `test_providers.py`, and `
 No device, actual model, credential, real assessment skill or vulnerability judgement is tested by this selection. Previous real-model readiness and real-device comparison plans are subordinate to this active structural scope.
 
 Validation: Windows/Python 3.12.10, 40 selected structural tests passed, zero skips. Four new opaque skill-loader tests passed. No full P3-backed suite was rerun after this scope change.
+
+## Active orchestration follow-up
+
+[Content-neutral Supervisor separation](STRUCTURAL-SUPERVISOR.md) now connects opaque mock skill loading to an injected mock executor. The previous statement that no structural runner was wired describes the earlier loader-only stage. The historical P3-backed alias remains compatibility-only; the active class is StructureSupervisor.

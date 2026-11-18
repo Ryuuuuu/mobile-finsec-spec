@@ -137,14 +137,14 @@ class LeaseStore:
         The supervisor maps selected item IDs to attempts. Optional item_id is
         an attempt-scope assertion here, not an independent catalog lookup.
         """
-        if operation not in {"p2.capture", "p3.check"}:
+        if operation not in {"p2.capture", "p3.check", "mock.execute"}:
             raise LeaseError("OPERATION_NOT_ALLOWED")
         with self._transaction() as db:
             row = self._row(db)
             self._match(row, token)
             if row["lifecycle"] != "active":
                 raise LeaseError("LEASE_REVOKED")
-            if operation == "p3.check" and not row["attempt_id"]:
+            if operation in {"p3.check", "mock.execute"} and not row["attempt_id"]:
                 raise LeaseError("ATTEMPT_REQUIRED")
             if operation == "p2.capture" and row["attempt_id"]:
                 raise LeaseError("ATTEMPT_SCOPE_MISMATCH")
