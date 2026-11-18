@@ -1,6 +1,12 @@
 # Native GPUI vertical slice: blocked before compilation
 
-## Observed boundary
+## Current verified state (2026-11-18 follow-up)
+
+Using persisted Machine/User PATH, the read-only probe now discovers Rust/Cargo/rustup and CMake: rustc/cargo 1.100.0 and CMake 4.5.0 executed successfully. cl remains unavailable and the usual Visual Studio Installer discovery path is absent. MSVC installation/license approval is still deferred. Rust metadata-only compilation was previously successful; native executable linking, GPUI build/rendering and Rust-Python IPC remain unverified. No new installation or security setting change occurred in this follow-up.
+
+The originally proposed adapter now has a [minimal mock loopback implementation](LOOPBACK-API.md) tested with real local TCP. This does not establish native UI integration. The following original observation is historical, before the Rust/CMake installation.
+
+## Original observed boundary
 
 On 2026-11-18 the Windows build terminal could not discover `rustc`, `cargo`, `rustup`, `cl` or `cmake`. The usual user Cargo/rustup directories, Visual Studio Installer discovery executable and CMake executable were absent. This establishes that this terminal is not prepared; it does not prove no alternate installation exists anywhere on disk. No Cargo manifest currently exists in this project.
 
@@ -36,7 +42,7 @@ The approved [workspace](../../../docs/spec/01-app-workspace.md), [check screen]
 |Live progress/cancel|`UIBridge.progress` / `StartAPI.cancel`|Background transport, bounded event queue, cursor resync and cancellation acknowledgement|
 |Result history/detail|`UIBridge.history` / `result`|Explicit tab switch, sealed records only; history remains available without device|
 
-The existing API is an in-process Python facade, not an HTTP endpoint that Rust can call today. First add a small loopback service adapter over that facade, restricted to synthetic fixtures and a single mock project. It must use a per-launch credential, bounded/versioned JSON messages and service-owned recording references. Do not expose arbitrary filesystem paths or payload bytes to a result preview. Start the Python asyncio worker separately; the Rust render thread must never wait for Python, SQLite or network I/O. Transport failures become unavailable/unknown state, not completion or automatic resubmission. This adapter is proposed, not already authenticated or tested.
+The initial API was an in-process Python facade. The later minimal loopback adapter wraps it for synthetic fixtures and a single mock project; see the current validation link above. The original design requirements are: It must use a per-launch credential, bounded/versioned JSON messages and service-owned recording references. Do not expose arbitrary filesystem paths or payload bytes to a result preview. Start the Python asyncio worker separately; the Rust render thread must never wait for Python, SQLite or network I/O. Transport failures become unavailable/unknown state, not completion or automatic resubmission. The minimal adapter now tests bearer authentication and bounded requests; native launcher integration remains pending.
 
 Carry `mock-ui.v1`, project ID, request generation, execution/run ID and event cursor across the transport. Reject stale project/generation/run responses before updating a GPUI entity; deduplicate event IDs. Preserve live/final separation and the current durable recovery-required admission semantics. A disconnect should disable new work but leave previously loaded final history readable. On application close request cancellation once; unknown cleanup remains recovery-required. No synthetic result label may be presented as a real assessment.
 

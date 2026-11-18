@@ -12,9 +12,9 @@ python scripts/run_structure_tests.py
 
 This explicit suite list excludes historical P3-backed tests and the legacy demo CLI. It uses local mock servers/processes where required, with no actual device, actual model service or credentials. Do not replace it with unrestricted `unittest discover`. Rust metadata compilation and eventual native GPUI tests are separate gates, not part of this Python command.
 
-The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen, authenticated network IPC or real model/device integration is established by these tests.
+The active APIs are `StructureSupervisor`, `StartAPI`, `UIBridge` and `UIWire`. `Supervisor` and `python -m integration demo` are historical P3-backed paths, not the current entry points. No production GPUI screen or real model/device integration is established by these tests. The minimal authenticated mock loopback adapter is validated separately below; it is not production IPC.
 
-Validation on Windows/Python 3.12.10: the explicit runner executed 108 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
+Validation on Windows/Python 3.12.10: the explicit runner executed 113 structural tests, all passed, zero skips. This does not execute Rust tests or a GPUI window.
 
 ## Current design and validation links
 
@@ -46,3 +46,5 @@ Use [StructureSupervisor](docs/STRUCTURAL-SUPERVISOR.md) for the active mock-onl
 The previous P2/P3-coupled architecture, full-suite command and CLI examples are retained only in [the archived README](docs/LEGACY-P4-README.md). They predate the structure-only user instruction and must not be used as current acceptance.
 
 [Actual mock child-process IPC](docs/MOCK-STDIO.md) tests Python-to-Python private pipes, EOF, forced termination, restart admission persistence and selected synthetic P1/P2 artifact handoff. Rust-Python IPC remains unverified.
+
+[Mock loopback API](docs/LOOPBACK-API.md) validates actual local TCP authentication, token rotation, bounded/versioned requests, correlation and transport shutdown. Rust/GPUI and cross-process HTTP remain unverified.
