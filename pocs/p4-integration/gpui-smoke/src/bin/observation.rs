@@ -51,7 +51,7 @@ impl Render for Observation{fn render(&mut self,_:&mut Window,cx:&mut Context<Se
  }
  div().flex().flex_col().size_full().p_6().gap_4().child(Label::new("Finsec Observation POC - SYNTHETIC ONLY / NO DEVICE / NO MODEL"))
  .child(div().flex().gap_3().children([("Record",0),("Check",1),("Results",2)].into_iter().map(|(s,i)|Button::new(("tab",i as usize)).label(s).on_click(cx.listener(move|t,_,_,cx|{t.tab=i;cx.notify();})))))
- .child(Label::new(self.status.clone())).child(body)
+ .child(Label::new(self.status.clone())).child(div().id("observation-scroll").flex_1().min_h_0().overflow_y_scroll().child(body))
 }}
 fn main(){application().with_assets(assets::Assets).run(|cx|{init(cx);open_window(WindowOptions::default(),cx,|_,cx|cx.new(|_|Observation::new())).expect("observation window");});}
 
