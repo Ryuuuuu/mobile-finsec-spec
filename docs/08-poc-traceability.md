@@ -2,6 +2,10 @@
 
 기준: 2026-11-18, 소스 `22057e5`. 이번 작업은 문서·코드·기존 검증 기록 대조이며 기기나 모델을 새로 실행한 시험이 아니다. [43개 승인 기능](spec/00-index.md), [18개 점검 범위](spec/09-checks-poc.md), [설계 수렴 기록](spec-review/03-feature-convergence.md)을 기준으로 한다. 설계 수렴은 구현 완료를 뜻하지 않는다. CHK ID와 공식 평가기준의 원본 ID·버전·적용 범위 대조는 아직 미완료다.
 
+## 2026-11-19 제한 범위 갱신
+
+아래 최초 기준표와 뒤쪽 준비 단계 기록은 당시 이력이다. 이후 실제 WSS GUI 재개와 GPUI 별도 녹화 창·순차 재생은 위 링크의 후속 결과를 따른다. 이번 실제 취소/재녹화 시험 종료 후 QA receipt 바이트 복원, reverse 없음, active/quarantine 0, 사용자 유지 설정을 확인했다. 과거 MSVC 승인 대기·GPUI 미실행 표현은 당시 단계에만 해당하며 최신 차단 상태가 아니다. 모든 검증을 최신 전체 제품 통과로 확대하지 않는다.
+
 ## 상태 읽기
 
 - **부분**: 해당 기능의 일부 POC 코드가 존재한다. 제품 기능 전체 구현을 뜻하지 않는다.
@@ -15,11 +19,11 @@
 |단계|존재하는 구현|검증된 범위|남은 제품 차이|
 |---|---|---|---|
 |P1|[입력/동선 엔진](../pocs/p1-record-replay/pc/core.py), [Appium 어댑터](../pocs/p1-record-replay/pc/adapter.py), [연속 영상/입력 GUI](../pocs/p1-record-replay/pc/mirror.py)|[다중 QA 앱](../pocs/p1-record-replay/docs/DEVICE-MATRIX.md): 기존 10단계+3회, native 4단계+3회, Canvas 2단계+3회. [연속 영상](../pocs/p1-record-replay/docs/DIRECT-MIRROR-INPUT.md): 실제 click/drag+3회, 최대화·Appium 입력 종료 후 영상 유지. 최근 자동 회귀 113 통과|Tk POC, GPUI 제품 아님. Compose/다중화면/잠금/물리 회전·USB 재연결 미검증. 새 통합 영상의 보호 화면 시험 별도 필요. 모든 앱 호환 아님|
-|P2|[HTTP relay](../pocs/p2-proxy-relay/relay.py), [WebSocket](../pocs/p2-proxy-relay/websocket_relay.py), [reverse 소유권](../pocs/p2-proxy-relay/device_resources.py)|[기기 QA matrix](../pocs/p2-proxy-relay/docs/ANDROID-APP-VALIDATION.md): HTTP/HTTPS/WS/WSS/OkHttp HTTP·HTTPS, pre/post 제외 및 CA 거부. 최근 로컬 회귀 86 통과|협조 QA 앱의 loopback routing·token 상관관계. 임의 앱 가로채기/OS 앱 귀속/HTTP2·3·QUIC/CONNECT 미지원. 수정된 reverse 소유권의 실기기 재검증 대기|
-|P1+P2|[공통 기록 barrier](../pocs/p1-record-replay/pc/combined.py), [GUI](../pocs/p1-record-replay/pc/combined_ui.py), [timeline](../pocs/p1-record-replay/pc/timeline.py)|[통합 기록](../pocs/p1-record-replay/docs/COMBINED-RECORDING.md): native+WebView HTTP 실제 GUI 기록, HTTPS 한 단계 기록·재생 성공. favicon도 보존|WSS GUI는 실제 연결 소실로 중단, replay 미통과. standalone WSS 성공과 구별. P4에 연결되지 않음. 원자적 트랜잭션/일반 앱 인과관계 증명 아님|
+|P2|[HTTP relay](../pocs/p2-proxy-relay/relay.py), [WebSocket](../pocs/p2-proxy-relay/websocket_relay.py), [reverse 소유권](../pocs/p2-proxy-relay/device_resources.py)|[기기 QA matrix](../pocs/p2-proxy-relay/docs/ANDROID-APP-VALIDATION.md): HTTP/HTTPS/WS/WSS/OkHttp HTTP·HTTPS, pre/post 제외 및 CA 거부. 최근 로컬 회귀 86 통과|협조 QA 앱의 loopback routing·token 상관관계. 임의 앱 가로채기/OS 앱 귀속/HTTP2·3·QUIC/CONNECT 미지원. 후속 QA 시험에서 소유 reverse 정리 확인; 물리 연결 소실 복구는 별도|
+|P1+P2|[공통 기록 barrier](../pocs/p1-record-replay/pc/combined.py), [GUI](../pocs/p1-record-replay/pc/combined_ui.py)|[통합 기록](../pocs/p1-record-replay/docs/COMBINED-RECORDING.md): HTTP/HTTPS에 이어 2026-11-18 자체 QA 앱 GUI WSS 1단계 녹화·재생, 각각 7개 패킷·사후조건 성공. [native POC](../pocs/p1-record-replay/docs/NATIVE-QA-QUEUE.md): `4245317` GPUI → 별도 P1 녹화 창 → 저장·목록 → 2개 순차 재생(7/14). 후속 실제 취소·재녹화 저장도 확인|이전 연결 소실·partial 증적은 유지. 일반 앱 인과관계·임의 앱 호환성·원자적 트랜잭션·검사 스킬 통합 증명 아님|
 |P3|[합성 판정 엔진](../pocs/p3-android-os-tamper/os_tamper), [읽기 전용 probe](../pocs/p3-android-os-tamper/android_probe.py)|[CHK-07 fixture](../pocs/p3-android-os-tamper/docs/VALIDATION.md): 3판정 각 3회. [probe](../pocs/p3-android-os-tamper/docs/ANDROID-READONLY-VALIDATION.md): 실제 로컬 stub/5초 timeout·보고서 검증, 72 통과+1 skip|실기기 probe는 quarantine에서 not_run/관찰 0건. 실제 OS 변조·보호 서비스 oracle 없음. probe는 항상 inconclusive이며 판정 엔진과 자동 통합되지 않음|
 |P4-a|[supervisor](../pocs/p4-integration/integration/supervisor.py), [lease](../pocs/p4-integration/integration/lease.py), [history](../pocs/p4-integration/integration/history.py)|[Windows CLI](../pocs/p4-integration/docs/WINDOWS-VALIDATION.md): 10개 실제 로컬 시나리오와 history/validate. [공급자 경계](../pocs/p4-integration/docs/PROVIDER-BOUNDARY-AUDIT.md): 최근 135 통과+1 skip|P2 loopback+P3 합성만 연결. P1 GUI·실제 Android probe·제품 프로젝트 저장소 미연결. 새 supervisor 인스턴스 차단은 OS 프로세스 재부팅 시험 아님|
-|P4-b/c|Provider protocol와 fake-a/b, 설계 UI 시안|두 이름은 같은 FakeProvider. 실제 모델 0, GPUI 실행 0|실제 provider별 adapter/인증/과금/원격 취소/격리, GPUI 3탭 제품 미구현|
+|P4-b/c|모델 비종속 구조 어댑터 및 [native 3탭 POC](../pocs/p4-integration/docs/NATIVE-WORKSPACE.md)|실제 Rust GPUI → Python → 자체 QA 기기 녹화·순차 재생 경로. 실모델 0. 모의 스킬 시험은 별도|제품 프로젝트/전체 UI·실제 공급자 인증/취소/격리와 검사 스킬 미검증|
 
 P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 통과시키지 않았다. 과거 P1 문서의 설정 복원과 이후 사용자가 유지하도록 한 설정은 서로 다른 시험 기록이다. 현재 최종 기기 설정·reverse 상태는 연결 승인 후 읽기 전용 확인 전까지 미확인이다. 미확인을 정리 실패로 단정하지 않는다.
 
@@ -31,7 +35,7 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 |---|---|---|---|---|---|
 |F-01|[프로젝트](spec/01-app-workspace.md)|미구현|run 출력 폴더만|없음|A/B 프로젝트 격리·열기/선택 G1|
 |F-02|[서비스 lifecycle](spec/01-app-workspace.md)|부분 P2|ON/OFF·실패·cleanup|QA relay 사용|제품 API/health/종료 소유권 G1|
-|F-03|[세 탭](spec/01-app-workspace.md)|미구현|없음|없음|GPUI 전환이 실행 상태를 바꾸지 않음 G1|
+|F-03|[세 탭](spec/01-app-workspace.md)|부분 native POC|Rust/Python 경계 시험|자체 QA 새 녹화·선택·순차 재생|제품 프로젝트 분리·전체 UI 수용 G1|
 |F-04|[재연결/stale](spec/01-app-workspace.md)|부분 P1/P4|stale/late event·로그|P1 이전 프레임 제거|UI cursor replay·서비스 재시작 G1/G3|
 |F-05|[설정](spec/01-app-workspace.md)|부분 CLI/Plan|닫힌 schema|QA 실행 설정만|secret 참조·설정 화면·다음 run 적용 G1/G7|
 |F-06|[기기 선택](spec/02-device-target.md)|부분 P1|선택 장치 guard|QA 장치 연결|다중 장치·프로필 선택 UI G2|
@@ -40,12 +44,12 @@ P3/P4 skip은 Windows 심볼릭링크 생성 권한 부재다. 권한을 바꿔 
 |F-09|[package/APK](spec/02-device-target.md)|부분 P1|build/split/namespace guard|QA 패키지 동적 launcher|제품 import와 설치 대상 불일치 G2/G5|
 |F-10|[설치/launch](spec/02-device-target.md)|부분 도구/CLI|실패·no-reset|QA 설치/launch; 은행 foreground만|설치 UI·여러 launcher·허가 확인 G2|
 |F-11|[단절/변경](spec/02-device-target.md)|부분 P1/P2|transport/generation/lease|실제 소실 partial|수정 후 USB 복구·자동 재전송 금지 G3|
-|F-12|[RECORD 경계](spec/03-record.md)|부분 P1/P2|중복·ack barrier|HTTP/HTTPS 통합|WSS 재시험·분산 start 실패 G3|
+|F-12|[RECORD 동기](spec/03-record.md)|부분 P1/P2|중복·ack barrier|HTTP/HTTPS 및 자체 QA WSS GUI|임의 앱·분산 start 복구 G3|
 |F-13|[입력 수집](spec/03-record.md)|부분 P1|intent/dispatch/postcondition|native text/tap·Canvas drag|설계 전체 action·IME/키보드 G2|
 |F-14|[action 상세](spec/03-record.md)|부분 P1|journal/route|GUI route provenance|제품 목록/상세·관찰 분리 G1|
 |F-15|[STOP/seal](spec/03-record.md)|부분 P1/P2|flush 실패·ack loss|GUI STOP·중단 partial|프로세스 강제 종료·디스크 오류 G3/G8|
 |F-16|[동선 보존](spec/03-record.md)|부분 P1|불변 원본/호환성|파일 선택 3회 재생|프로젝트 라이브러리·새 ID UI G1/G2|
-|F-17|[launch/replay](spec/03-record.md)|부분 P1|초기조건/step 실패|QA reset 후 반복 성공|일반 앱 reset/oracle·WSS GUI G2/G3|
+|F-17|[launch/replay](spec/03-record.md)|부분 P1|초기상태/step 검증|QA reset 후 반복 재생, WSS 단일·복수 동선|일반 앱 reset/oracle G2/G3|
 |F-18|[coverage gap](spec/03-record.md)|부분 P1/P2|partial/uncertain|실제 끊김 partial|catalog eligibility까지 연결 G1/G3|
 |F-19|[proxy 상태](spec/04-proxy.md)|부분 P2|listener/drain/toggle|QA 경유|제품 서비스 UI·일반 routing G3|
 |F-20|[routing/귀속](spec/04-proxy.md)|부분 QA 전용|unverified/token 구분|협조 앱 token|OS 귀속/타 앱 혼입 G3; token만으로 대체 금지|

@@ -32,9 +32,9 @@
 
 - [P1](pocs/p1-record-replay/README.md): 선택 QA 앱의 PC 기록/재생과 연속 영상. 특정 native/Canvas 동선의 실기기 시험 통과이며 모든 앱 호환은 아닙니다.
 - [P2](pocs/p2-proxy-relay/README.md): 협조 QA 앱의 HTTP/HTTPS/WS/WSS 및 제한된 OkHttp 경로 검증. 일반 앱 귀속·가로채기 지원은 아닙니다.
-- [P1/P2 통합](pocs/p1-record-replay/docs/COMBINED-RECORDING.md): HTTP 기록과 HTTPS 기록/재생 성공. WSS GUI는 연결 소실로 중단됐고, reverse 소유권 수정 후 실기기 재검증이 남았습니다.
+- [P1/P2 통합](pocs/p1-record-replay/docs/COMBINED-RECORDING.md): 이전 WSS GUI 연결 소실 이력을 보존하며, 이후 자체 QA 앱에서 GUI 단일 동선 녹화·재생을 통과했습니다. [GPUI POC](pocs/p1-record-replay/docs/NATIVE-QA-QUEUE.md)는 별도 P1 녹화 창을 열어 새 동선 저장 후 복수 동선 순차 재생을 검증했습니다(`4245317`). 이어 실제 녹화 중 취소·미완성 목록 제외·새 녹화 저장을 확인했습니다. 임의 앱 지원 검증은 아닙니다.
 - [P3](pocs/p3-android-os-tamper/README.md): CHK-07 합성 판정 엔진과 별도 read-only Android probe. 실제 보안 판정 미검증입니다.
-- [P4](pocs/p4-integration/README.md): fake provider와 로컬 P2/P3 실행·이력·취소/복구 경계. 실모델과 GPUI 제품 통합은 미구현/미검증입니다.
+- [P4](pocs/p4-integration/README.md): 구조 전용 모의 실행과 별도로 [native 3탭 POC](pocs/p4-integration/docs/NATIVE-WORKSPACE.md)의 Python·자체 QA 기기 연결을 검증했습니다. 실모델·검사 스킬 실행 및 GPUI 제품 전체 완성은 미검증입니다.
 
 초기 문서의 시점별 검증 기록은 보존합니다. POC 성공은 제품 전체 기능 또는 공식 평가 통과를 뜻하지 않습니다.
 

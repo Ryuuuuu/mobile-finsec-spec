@@ -37,7 +37,7 @@ Validation on 2026-11-19: 148 P1 tests passed. New cases cover publication/resta
 - New capture -> existing double-send route was selected in GPUI and replayed sequentially on A34. Results showed both succeeded with separate 7/14 packet scopes. The source capture's own seven packet rows retained a third distinct scope.
 - Source recording identity matched the first replay, original QA receipt bytes matched all three attempt backups, reverse mappings were empty, active/quarantined leases were zero, and user-maintained settings remained unchanged. Normal native close also stopped the owned Appium server.
 
-Real evidence stays private. This proves a native-launched separate P1 recording/replay flow for the cooperating QA app; it does not prove embedded GPUI mirroring, arbitrary-app automation, custom naming/editing, native active-cancel acceptance, or inspection/model execution. Names are generated and refresh is explicit. Automated restart/catalog tests use synthetic fixtures; no native UI restart acceptance is claimed.
+Real evidence stays private. This proves a native-launched separate P1 recording/replay flow for the cooperating QA app; it does not prove embedded GPUI mirroring, arbitrary-app automation, custom naming/editing, inspection/model execution (active-cancel acceptance is reported separately below). Names are generated and refresh is explicit. Automated restart/catalog tests use synthetic fixtures; no native UI restart acceptance is claimed.
 
 ## Cancellation, loss and restart acceptance (device-free)
 
@@ -51,10 +51,21 @@ Follow-up to `4245317`, 2026-11-19: five new regression tests in `tests/test_nat
 | Delayed cleanup | Real local child acknowledges cancellation but waits on a test gate. Owner remains live, progress remains in_progress, final history stays empty, overlapping start and restarted API admission are blocked. Releasing the test gate allows verified cleanup and normal exit; no hard kill is used. |
 | Parent pipe disappears | Separate Python API process receives a real pipe EOF after submit. Worker receives cancellation and exits. Clean versus unconfirmed cleanup is persisted distinctly; restart permits new work only for the clean case. The old command returns recovery_required in both cases. Pre-existing synthetic files are unchanged. |
 
-These are current POC behaviors, not an agreed product stop/skip/resume policy. The timeout case injects an exception after simulated dispatch; it does not unplug A34 or claim an actual Appium timeout. Pipe EOF models the existing native deadline/disconnect action, but the Rust timer itself is not exercised in these new tests. Cancellation marker handling uses a synthetic child, so active native Tk cancellation remains separately unverified. A permanently hung capture child has no bounded forced-termination policy: the owner may keep waiting and new work remains blocked. This is an explicit unresolved limitation, not successful resource recovery. Actual previously captured device evidence was not modified or used as test fixtures.
+These are current POC behaviors, not an agreed product stop/skip/resume policy. The timeout case injects an exception after simulated dispatch; it does not unplug A34 or claim an actual Appium timeout. Pipe EOF models the existing native deadline/disconnect action, but the Rust timer itself is not exercised in these new tests. Cancellation marker handling in these automated tests uses a synthetic child; the later real native cancellation acceptance is recorded separately below. A permanently hung capture child has no bounded forced-termination policy: the owner may keep waiting and new work remains blocked. This is an explicit unresolved limitation, not successful resource recovery. Actual previously captured device evidence was not modified or used as test fixtures.
 
 Reproduce the focused device-free cases from P1 with the existing environment:
 
 ```text
 python -m unittest discover -s tests -p test_native_failure_boundaries.py -v
 ```
+
+## Actual native recording cancellation and recovery (2026-11-19)
+
+Executed on `dcac767` with the authorized A34 and disposable network QA app, through Windows GPUI and the separate existing P1 recorder. No production-code changes were needed.
+
+1. GPUI New QA recording opened P1. Connect -> RECORD -> PC mirror SEND WSS recorded one locator action, initial `ready`, postcondition `sent:1`. While recording remained active, GPUI Check -> Cancel queue delivered cancellation; the recorder closed normally. Final capture status was interrupted, cleanup_verified=true, with no cleanup/operation errors. The retained route is incomplete and its combined link partial; its seven packet rows remain available privately. This is not a completed route.
+2. Refresh showed only the three pre-existing complete routes. No cancelled route was published to saved-recordings.
+3. In the same GPUI/API instance, a new explicit recording repeated the one QA action. STOP saved a completed route and completed combined link with seven packet rows. Cleanup verified; refresh showed four entries, adding only this completed capture. This was actual PC GUI input, not a generated route or automatic retry.
+4. Both executions have distinct network IDs and unchanged original QA receipt backups. Current app receipt matches byte-for-byte; all 54 files in the preceding native acceptance evidence directory retain their SHA-256. Reverse mappings are empty; active/quarantine leases are zero. User-maintained device settings remain unchanged. Native window and owned Appium server exited normally.
+
+The two final results, journals, packets and verification report remain local/private; no device IDs, screenshots, receipts or packet bodies are included here. Catalog metadata still explicitly says source_not_loaded for packets: listing does not imply packet review. This test covers cooperative cancellation between completed input steps and a fresh explicit recording. It does not cover permanent child hang, physical disconnect, cancellation during dispatch, arbitrary applications, or model/inspection execution. The unbounded hung-child limitation above remains open. Existing automated failure regressions remain complementary, not substitutes for this observed device/UI result.
