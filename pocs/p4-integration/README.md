@@ -18,7 +18,7 @@ Validation on Windows/Python 3.12.10: the explicit runner executed 155 structura
 
 ## Current design and validation links
 
-[State-only QA instrumentation](docs/QA-STATE-ONLY.md) provides a separate fixed own-app test contract without Appium/P2. Python contract tests and Android SDK Java compilation passed; APK installation, device execution and GPUI connection are not yet verified.
+[State-only QA instrumentation](docs/QA-STATE-ONLY.md) provides a separate fixed own-app test contract without Appium/P2. Contract tests, local signed APK verification and one authorized A34 button/state probe passed. GPUI connection and saved-route replay remain unverified; this is an own-process fixture callback test.
 
 [GPUI fixed observation preview](docs/GPUI-OBSERVATION-PREVIEW.md) verifies a dedicated synthetic 3-tab GPUI-kit window, plan approval/version rejection and A/B coverage/review result display through an actual Python child. It is separate from the real-device workspace and has no real model or device connection.
 

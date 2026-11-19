@@ -28,6 +28,18 @@ python -m unittest discover -s tests -p test_qa_state_only.py -v
 
 ## Remaining executable preparation
 
+### Subsequent local build and authorized A34 check (2026-11-19)
+
+The existing SDK 35 tools successfully packaged the fixture (12,689 bytes), and a private local test key signed it. APK signature v2/v3 and zip alignment verification passed. The compiled manifest requested zero permissions, kept `StateActivity` non-exported, disabled backup, and targeted instrumentation only at its own package. APK and key remain outside Git.
+
+After explicit installation approval, the previously absent `dev.finsec.qa.stateonly` package was installed on the selected A34, without replacing another package. The installer printed progress lines before `Success`; an overly strict private harness initially stopped before running the probe. Inspection confirmed successful installation, so it was not repeated.
+
+The fixed probe then ran **once** and returned the exact three-line contract accepted by `run_probe`: `state-only.v1`, `QA_READY>QA_SENT`, and successful instrumentation code. The result was `completed` with `activity_finish_reported`; the fixture was not the resumed activity afterward. The three hidden API values and Settings helper mock-location state were equal immediately before/after the probe, and the pre-existing network QA fixture receipt hash was unchanged. No Appium session, proxy, raw capture, external model/service or settings-write command was used.
+
+The private harness's all-package comparison incorrectly removed the newly installed fixture only from the after-set even though its probe baseline already included it. Its false result is **not evidence of another package changing**, but that aggregate check is invalid and is not claimed as passed. No broad claim about every other app's data or background behavior is made. The new fixture remains installed; no uninstall or data-clear command was issued. It may later be removed independently by its unique package name.
+
+This validates only the own-process button callback and fixed state return on that device. It does not validate physical input injection, saved P1 route replay or GPUI display integration. The preparation notes below describe the path used and the remaining integration boundaries; APK packaging and this one device probe are now verified.
+
 Package these sources and the supplied manifest as a **new disposable APK** using the existing Android build tools: compile the Java sources against `android.jar`, convert classes with D8, package the manifest with AAPT2, add `classes.dex`, align and sign with a private local test key. Keep keys, APKs and device receipts out of Git. This packaging/signing step is not validated by the Java compilation above. Install only this distinct package, handling any user installation confirmation before continuing; do not replace existing QA apps.
 
 After installation, the fixed host helper can run the command above and expose only its allowlisted result to a future read-only GPUI result adapter. Validate actual returned framing first; unexpected formatting must remain unverified rather than be relaxed into accepting unrelated output. Then verify activity closure and device settings before/after. GPUI display connection, approved plan/version binding, P1 route events and multi-route evidence are **not implemented by this small path** and must not be claimed from its three contract tests. Integrating them requires preserving the existing immutable plan and occurrence contracts; this probe does not silently substitute for saved-route replay.
