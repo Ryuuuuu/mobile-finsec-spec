@@ -4,7 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 from .observation_poc import Route,Checkpoint,Plan,Scene,FakeReview,ObservationPOC,SyntheticDeviceSlot,Applicability,digest
 from .observation_matching import TimingRule,QAEvent,match_timing
-from .observation_archive import save_completed,load_completed
+from .observation_archive import save_completed,load_completed,history
 
 LIMIT=262144
 
@@ -40,6 +40,9 @@ class ObservationAPI:
         self.plan=Plan(routes,cps,review_timeout=8)
 
     def operation(self,op,args):
+        if op=='history':
+            try:return history(self.root)
+            except (OSError,ValueError,TypeError):return dict(status='HISTORY_UNAVAILABLE',history=[])
         if op=='load_completed':
             try:return load_completed(self.root,args.get('run_id'),args.get('plan_hash'))
             except (OSError,ValueError,KeyError,TypeError,AttributeError,RecursionError):return dict(status='COMPLETED_REPORT_UNAVAILABLE_OR_INVALID')

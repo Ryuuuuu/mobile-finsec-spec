@@ -26,6 +26,9 @@ class ArchiveTests(unittest.IsolatedAsyncioTestCase):
                 self.assertEqual(reply['result'],result);self.assertEqual(reply['matching_report'],json.loads(json.dumps(matching)))
                 self.assertEqual({r['status'] for r in reply['matching_report']['rows']},{'MATCHED','UNMATCHED','AMBIGUOUS'})
                 self.assertEqual((await request(2,'status',{}))['status'],'idle')
+                listed=await request(4,'history',{})
+                self.assertEqual(listed['history'][0]['run_id'],result['run_id'])
+                self.assertTrue(listed['history'][0]['available'])
                 self.assertEqual((await request(3,'load_completed',dict(run_id=result['run_id'],plan_hash='0'*64)))['status'],'COMPLETED_REPORT_UNAVAILABLE_OR_INVALID')
                 self.assertEqual(len([p for p in Path(root).iterdir() if len(p.name)==32]),1)
             finally:
