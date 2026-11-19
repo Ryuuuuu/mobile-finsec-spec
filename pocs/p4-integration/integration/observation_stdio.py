@@ -14,15 +14,15 @@ class ObservationAPI:
         self.make_plan()
 
     def make_plan(self):
-        routes=tuple(Route(name,'v'+str(self.revision),0,('tap',)) for name in ('route-A','route-B'))
-        cps=tuple(Checkpoint('state','mock-check',r.recording_id,r.version,r.content_hash,0,'tap','after_postcondition','QA_SENT') for r in routes)
+        routes=tuple(Route('route-A','v'+str(self.revision),occurrence,('tap',)) for occurrence in (0,1))
+        cps=tuple(Checkpoint('state','mock-check',r.recording_id,r.version,r.content_hash,r.occurrence,'tap','after_postcondition','QA_SENT') for r in routes)
         self.plan=Plan(routes,cps,review_timeout=8)
 
     def operation(self,op,args):
         if op=='preview':
             return dict(status='ok',revision=self.revision,plan_hash=self.plan.content_hash,
                         checkpoints=[asdict(c) for c in self.plan.checkpoints],
-                        scenario='A/B complete' if self.revision%2 else 'B evidence missing (synthetic)',
+                        scenario='Same route occurrences 0/1 complete' if self.revision%2 else 'Only occurrence 1 has evidence (synthetic)',
                         capture_timeout=self.plan.capture_timeout,review_timeout=self.plan.review_timeout,
                         approved=self.approved==self.plan.content_hash)
         if op=='new_version':
@@ -38,7 +38,7 @@ class ObservationAPI:
             if args.get('plan_hash')!=self.plan.content_hash:return dict(status='PLAN_VERSION_MISMATCH')
             if self.approved!=self.plan.content_hash:return dict(status='PLAN_NOT_APPROVED')
             self.owner=ObservationPOC(self.root,self.plan,self.approved,self.slot,FakeReview(delay=9))
-            scenes={('route-A',0,'tap'):Scene(),('route-B',0,'tap'):Scene(missing=not self.revision%2)}
+            scenes={('route-A',0,'tap'):Scene(missing=not self.revision%2),('route-A',1,'tap'):Scene()}
             self.error=None
             async def execute():
                 try:await self.owner.run(scenes)

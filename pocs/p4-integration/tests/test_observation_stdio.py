@@ -10,6 +10,10 @@ class ObservationAPITests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(api.operation('start',{'plan_hash':v1['plan_hash']})['status'],'PLAN_NOT_APPROVED')
             self.assertEqual(api.operation('approve',{'plan_hash':v1['plan_hash']})['status'],'approved')
             v2=api.operation('new_version',{})
+            cps=v2['checkpoints']
+            self.assertEqual([c['occurrence'] for c in cps],[0,1])
+            for field in ('recording_id','route_version','route_hash','step_id'):
+                self.assertEqual(cps[0][field],cps[1][field])
             self.assertEqual(api.operation('start',{'plan_hash':v1['plan_hash']})['status'],'PLAN_VERSION_MISMATCH')
             api.operation('approve',{'plan_hash':v2['plan_hash']})
             self.assertEqual(api.operation('start',{'plan_hash':v2['plan_hash']})['status'],'accepted')
@@ -18,14 +22,17 @@ class ObservationAPITests(unittest.IsolatedAsyncioTestCase):
                 if status.get('status')=='review_pending':break
                 await asyncio.sleep(.002)
             self.assertEqual(status['replay'],'completed');self.assertFalse(status['final_available'])
+            self.assertEqual([r['checkpoint']['occurrence'] for r in status['rows']],[0,1])
+            self.assertEqual([bool(r['evidence_ref']) for r in status['rows']],[False,True])
             self.assertEqual(api.operation('result',{})['status'],'not_finalized')
             self.assertEqual(api.operation('new_version',{})['status'],'busy')
             await api.task
             result=api.operation('result',{})['result']
             self.assertEqual(result['checks']['mock-check']['routes_with_evidence'],1)
             self.assertEqual(result['checks']['mock-check']['routes_expected'],2)
-            self.assertEqual([r['review'] for r in result['rows']],['REVIEW_TIMEOUT','NOT_REVIEWED'])
-            self.assertEqual(result['rows'][1]['reason'],'EVIDENCE_INSUFFICIENT')
+            self.assertEqual([r['review'] for r in result['rows']],['NOT_REVIEWED','REVIEW_TIMEOUT'])
+            self.assertEqual(result['rows'][0]['reason'],'EVIDENCE_INSUFFICIENT')
+            self.assertEqual([r['checkpoint']['occurrence'] for r in result['rows']],[0,1])
             await api.close()
 
     async def test_actual_child_preview_scope_and_eof_cleanup(self):
