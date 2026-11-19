@@ -24,7 +24,7 @@ Unknown/excluded cells similarly remain as `APPLICABILITY_UNKNOWN` / `NOT_APPLIC
 
 ## Compatibility
 
-V1 remains the default for all existing fixture, bridge, CLI and GPUI callers. Its canonical plan hash explicitly omits the new empty fields, preserving prior approvals and evidence identities; it rejects attempts to silently supply applicability in v1. Its result contract remains `synthetic-observation.v1`, including its historical checkpoint-derived coverage limitation. V2 explicitly emits `synthetic-observation.v2` with applicability reporting; consumers must opt in and handle report-only/null-step rows. No existing caller was silently migrated. **GPUI does not render this new mode yet and was not opened or tested in this pass.** Existing v1 UI contract tests do not establish v2 UI support.
+At the original reporting milestone, v1 remained the default for fixture, bridge, CLI and GPUI callers. Its canonical plan hash explicitly omits the new empty fields, preserving prior approvals and evidence identities; it rejects attempts to silently supply applicability in v1. Its result contract remains `synthetic-observation.v1`, including its historical checkpoint-derived coverage limitation. V2 explicitly emits `synthetic-observation.v2` with applicability reporting; consumers must opt in and handle report-only/null-step rows. No existing caller was silently migrated. **GPUI does not render this new mode yet and was not opened or tested in this pass.** Existing v1 UI contract tests do not establish v2 UI support.
 
 ## Focused synthetic verification
 
@@ -39,3 +39,5 @@ From P4, run `python -m unittest discover -s tests -p test_observation_applicabi
 No phone, real app, capture, model, inspection skill, setup change, UI or external service is involved. Fixtures use temporary local storage and fake review only. Power-loss durability, restarted-run reconstruction, real applicability reasoning, production schema migration and v2 rendering remain outside this bounded reporting change.
 
 Windows/Python focused results: v2 applicability **6/6 passed (0.107s)**; existing observation **17/17 (0.747s)**; existing P1 bridge with fake peers **5/5 (2.643s)**; existing Python UI/child contract **2/2 (8.168s)**. The final v2-only validation/summary refinements reran the six applicability tests, including v1 compatibility. No broad structural suite, Rust build, UI or real-device success is claimed for this pass. `git diff --check` passed.
+
+Subsequent independent synthetic GPUI opt-in and its actual verification limits are recorded in [per-check timing follow-up](OBSERVATION-TIMING-METADATA.md#independent-synthetic-gpui-follow-up). The above no-v2-rendering statement describes the original reporting-only pass.

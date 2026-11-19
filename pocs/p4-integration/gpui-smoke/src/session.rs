@@ -14,7 +14,7 @@ impl Session {
   let mut cmd=if observation {
    let python=std::env::var_os("FINSEC_MOCK_PYTHON").ok_or("Set FINSEC_MOCK_PYTHON")?;
    let root=std::env::var_os("FINSEC_OBSERVATION_ROOT").ok_or("Set FINSEC_OBSERVATION_ROOT")?;
-   let mut c=Command::new(python);c.args(["-m","integration.observation_stdio","--root"]).arg(root).current_dir(base);c
+   let mut c=Command::new(python);c.args(["-m","integration.observation_stdio","--plan-mode","v2","--root"]).arg(root).current_dir(base);c
   }else if live {
    let python=std::env::var_os("FINSEC_QA_PYTHON").ok_or("Set FINSEC_QA_PYTHON")?;
    let config=std::env::var_os("FINSEC_QA_CONFIG").unwrap();

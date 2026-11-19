@@ -132,3 +132,5 @@ not_applicable과 unknown은 사유와 별도 개수·행을 보존하되 applic
 [P1 재생 경계 연결](../../pocs/p4-integration/docs/P1-OBSERVATION-BRIDGE.md)은 실제 P1 엔진·큐와 합성 기기 어댑터를 사용해 시점·동선 귀속·검토 지연·취소를 별도로 시험한다. GPUI 계획 UI와 실기기 상태 취득, 실제 검토기 격리를 완료했다는 뜻은 아니다.
 
 [합성 체크포인트 POC](../../pocs/p4-integration/docs/OBSERVATION-CHECKPOINT-POC.md)는 고정 계획·QA 상태·가짜 검토기로 일부 경계를 시험한다. 위 전체 수용 계획의 완료가 아니다. 실제 자식 프로세스 격리와 기기 연결은 미구현이며, 일반 Python 실행을 읽기 전용 격리로 간주하지 않는다.
+
+후속 독립 합성 GPUI는 v2를 명시적으로 선택한다. [항목별 타이밍 POC 및 검증 한계](../../pocs/p4-integration/docs/OBSERVATION-TIMING-METADATA.md#independent-synthetic-gpui-follow-up) 참조. 기존 v1 브리지와 기기 경로는 유지하며, 위 v2 UI 미구현 설명은 최초 reporting-only 단계의 이력이다. 최종 보고는 승인된 UNMATCHED/AMBIGUOUS를 읽기 전용 메타데이터로 구분하고 체크포인트나 동작을 만들어내지 않는다.

@@ -4,6 +4,32 @@ from integration.observation_stdio import ObservationAPI
 
 
 class ObservationAPITests(unittest.IsolatedAsyncioTestCase):
+    async def test_v2_per_check_matching_gaps_and_completed_result_binding(self):
+        with tempfile.TemporaryDirectory() as root:
+            api=ObservationAPI(root,mode='v2');preview=api.operation('preview',{})
+            self.assertEqual(preview['plan_schema_version'],2)
+            self.assertEqual([r['status'] for r in preview['matching_report']['rows']],
+                             ['MATCHED','UNMATCHED','AMBIGUOUS','MATCHED'])
+            self.assertEqual({c['phase'] for c in preview['checkpoints']},{'before_dispatch','after_postcondition'})
+            api.operation('approve',{'plan_hash':preview['plan_hash']})
+            api.operation('start',{'plan_hash':preview['plan_hash']})
+            await api.task
+            reply=api.operation('result',{});result=reply['result']
+            self.assertEqual(result['contract'],'synthetic-observation.v2')
+            self.assertEqual([(result['checks'][c]['routes_with_evidence'],result['checks'][c]['routes_expected'])
+                              for c in ('before-check','after-check')],[(1,2),(0,2)])
+            self.assertEqual([r['reason'] for r in result['rows']].count('PLAN_CHECKPOINT_MISSING'),2)
+            self.assertEqual([r['reason'] for r in result['rows']].count('EVIDENCE_INSUFFICIENT'),1)
+            self.assertTrue(all(r['checkpoint']['step_id'] is None and r['checkpoint']['phase'] is None
+                                for r in result['rows'] if r['reason']=='PLAN_CHECKPOINT_MISSING'))
+            old=reply['matching_report']
+            self.assertEqual([(r['check_id'],r['occurrence'],r['status'],r['candidate_count'])
+                              for r in old['rows'] if r['status']!='MATCHED'],
+                             [('before-check',1,'UNMATCHED',0),('after-check',0,'AMBIGUOUS',2)])
+            api.operation('new_version',{})
+            self.assertEqual(api.operation('result',{})['matching_report'],old)
+            self.assertNotEqual(api.matching,old)
+            await api.close()
     async def test_approval_version_pending_and_route_coverage(self):
         with tempfile.TemporaryDirectory() as root:
             api=ObservationAPI(root);v1=api.operation('preview',{})
