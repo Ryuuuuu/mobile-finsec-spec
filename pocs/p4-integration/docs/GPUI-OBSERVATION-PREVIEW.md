@@ -45,3 +45,14 @@ cargo run --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml --bin observ
 Choose Check -> Load fixed plan -> Approve -> Load newer fixed version -> Run with old approval (rejected) -> Approve current -> Run -> Results -> Load final result. No A34 or Appium is needed. To exercise the actual Rust child pipe without UI, use the same environment with `cargo test --manifest-path pocs/p4-integration/gpui-smoke/Cargo.toml --bin observation -- actual_observation_pipe_contract --ignored --nocapture`.
 
 Related: [approved observation spec](../../../docs/spec/10-observation-checkpoints.md), [standalone synthetic structure](OBSERVATION-CHECKPOINT-POC.md), [separate real A34 state-reader acceptance](QA-STATE-DEVICE-VALIDATION.md).
+# Strict no-settings-change device preflight (2026-11-19)
+
+A subsequent request narrowed validation to GPUI -> P1 -> the disposable QA app, without security-setting changes or raw screen/traffic collection. Read-only preflight confirmed an authorized ADB device and an accessible, responding GPUI observation window. The window still showed the prior synthetic A/B result; this is not a new device execution.
+
+The current paths cannot be joined unchanged under that restriction:
+
+- `Session::start_observation` deliberately launches only `integration.observation_stdio`; it does not attach a device.
+- `pc.qa_queue_stdio.execute` starts P2 collection, calls the existing Appium initialization path, and restores its security baseline during cleanup. It is not a state-only observation runner.
+- Inspection of the locally installed UiAutomator2 driver's `performSessionPreExecSetup` and `deleteSession` found hidden API policy writes on Android API >= 28, including restoration to defaults. Merely selecting `skipDeviceInitialization` does not demonstrate that these writes are absent. Ignoring a policy error is not a no-write guarantee.
+
+No device session, proxy, QA replay, raw capture, or setting change was started in this preflight. The GUI remains the synthetic-only POC. A test-only state-only runner needs a verified session lifecycle that does not write security settings, or an explicitly revised permission boundary; neither is silently inferred from earlier approvals. Such a runner must also exclude P2/raw evidence, preserve QA app data, and retain version/occurrence binding and cleanup reporting. Driver patching or alternative device control has not been implemented or validated here. This is an integration blocker, not a failed QA observation result.
