@@ -18,6 +18,8 @@ Validation on Windows/Python 3.12.10: the explicit runner executed 155 structura
 
 ## Current design and validation links
 
+[Observation checkpoint POC](docs/OBSERVATION-CHECKPOINT-POC.md) tests approved immutable plans, separate synthetic-route evidence, coverage gaps, deduplication, cancellation and a delayed fixed fake reviewer without blocking synthetic replay. Real child isolation, model/inspection execution and device/GPUI wiring are not claimed.
+
 
 [Structure-only scope](docs/STRUCTURE-ONLY-SCOPE.md) supersedes further check-content/verdict testing. User-authored skills and tools are outside current implementation scope. Use opaque mock skills and the selected structural tests; do not use the historical full suite as current acceptance.
 
