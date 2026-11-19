@@ -77,6 +77,23 @@ class ObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['rows'][1]['reason'],'EVIDENCE_INSUFFICIENT')
         self.assertEqual(result['replay_status'],'completed')
 
+    async def test_repeat_missing_second_occurrence_and_redelivery(self):
+        first=self.plan.routes[0]; cp=self.plan.checkpoints[0]
+        plan=replace(self.plan,routes=(first,replace(first,occurrence=1)),
+                     checkpoints=(cp,replace(cp,occurrence=1)))
+        owner=self.owner(plan)
+        result=await owner.run({('route-a',0,'tap'):Scene(),
+                                ('route-a',1,'tap'):Scene(missing=True)})
+        self.assertEqual(result['checks']['check-one']['routes_with_evidence'],1)
+        self.assertEqual(result['checks']['check-one']['routes_expected'],2)
+        self.assertEqual([r['collection'] for r in result['rows']],
+                         ['SEALED','EVIDENCE_INSUFFICIENT'])
+        snapshot=next(iter(owner.snapshots.values()))
+        saved=(owner.root/'result.json').read_bytes()
+        self.assertFalse(owner.seal(snapshot.key,snapshot.observed_state))
+        self.assertEqual(len(owner.snapshots),1)
+        self.assertEqual((owner.root/'result.json').read_bytes(),saved)
+
     async def test_mismatch_not_reached_and_input_failure_are_distinct(self):
         self.scenes['route-a',0,'tap']=Scene(after='QA_OTHER')
         result=await self.owner().run(self.scenes)

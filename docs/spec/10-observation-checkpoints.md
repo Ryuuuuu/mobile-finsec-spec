@@ -29,6 +29,7 @@ ObservationPlan
     applicable | not_applicable | unknown, reason
   checkpoints[]
     checkpoint_id, check_id, recording_id, route_version, route_content_hash
+    selection_occurrence
     step_id, event_phase (before_dispatch | after_postcondition | route_end)
     expected_screen_state, condition_schema_version
     required_evidence_types[], permitted_fields[], excluded_fields[]
@@ -36,6 +37,8 @@ ObservationPlan
   review_deadline_ms, queue_limit, storage_limit, cancellation_policy_version
   approved_plan_hash, approved_at, approval_source
 ```
+
+`checkpoints[].selection_occurrence`는 `ordered_routes[]`의 정확한 선택 인스턴스를 참조한다. 같은 recording/version을 반복 선택해도 합치지 않는다. 현재 Python POC의 `occurrence` 필드가 이 값에 해당하며 P1 브리지는 0부터 시작하는 큐 위치로 바인딩한다. 첫 선택에만 증적이 있으면 커버리지는 1/2이고 두 번째 누락 사유를 보존한다. 같은 이벤트 재전달은 새 선택 인스턴스가 아니다. [반복 선택 회귀 근거](../../pocs/p4-integration/docs/P1-OBSERVATION-BRIDGE.md)를 참조한다.
 
 단계 ID는 동선 버전 안에서 안정적이어야 한다. 화면 상태는 관측 가능한 QA 상태 조건으로 표현하고 임의 실행 문자열을 넣지 않는다. 모든 선택 점검 × 선택 동선(반복 선택 occurrence 포함)에 적용 관계를 남긴다. 관련 동선 하나만 대표로 고르지 않는다. 적용 여부가 unknown이면 공백으로 표시하고, 근거 없이 not_applicable로 줄이지 않는다. 같은 체크포인트가 여러 동선에 해당하면 **모든 해당 동선에서 별도 증적과 결과 행**을 만든다.
 

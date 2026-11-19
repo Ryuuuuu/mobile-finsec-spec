@@ -46,3 +46,11 @@ python -m unittest discover -s tests -v
 ```
 
 Validation (Windows/Python 3.12, 2026-11-19): P1 **153/153 passed (14.780s)**. P4 structural runner **172 tests: 170 passed, 2 skipped (33.819s)**, including all four bridge cases and thirteen standalone observation cases. The two existing TLS/WSS tests skipped because the P4 environment lacks the ephemeral-PKI dependency; no protocol success is inferred from these skips. No real device/model/GPUI run was performed for this follow-up. Actual prior private A34 evidence was not used as a fixture or modified.
+
+## Repeated selection regression (2026-11-19)
+
+The [plan schema](../../../docs/spec/10-observation-checkpoints.md) now explicitly includes `checkpoints[].selection_occurrence`, matching the existing POC `Checkpoint.occurrence` and zero-based P1 queue binding. This clarifies the contract without changing runtime behavior.
+
+Two added regressions select the exact same recording/version twice. Only occurrence 0 has evidence; occurrence 1 retains `EVIDENCE_INSUFFICIENT`, and check coverage stays **1/2**. Redelivering the first sealed event does not create another snapshot or change the persisted final result. One test uses synthetic replay; the other executes the actual P1 Engine/CombinedRun/ReplayQueue and bridge with fake device/network peers and an injected missing second capture. Both queue entries complete, their observation keys remain distinct, and original fixture files and resource ownership remain intact.
+
+Focused results: observation suite **14/14 passed (0.541s)**; P1 bridge suite **5/5 passed (2.632s)**. Reproduce with `python -m unittest discover -s tests -p test_observation_poc.py -v` and the bridge command above. This follow-up adds no real device, GUI or model validation. The separate [GPUI preview validation](GPUI-OBSERVATION-PREVIEW.md) uses different A/B routes, not this repeated-source scenario.

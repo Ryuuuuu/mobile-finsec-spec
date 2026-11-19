@@ -1,5 +1,6 @@
 """Actual P1 Engine/CombinedRun/ReplayQueue, fake device and network command peer."""
 import asyncio,copy,json,tempfile,unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest.mock import Mock
 import test_artifact_reader  # Existing source-path setup, no device execution.
@@ -76,6 +77,37 @@ class P1ObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(result['rows'][1]['collection'],'STATE_MISMATCH')
         self.assertEqual(result['checks']['check-one']['routes_with_evidence'],1)
         self.assertEqual(result['checks']['check-one']['routes_expected'],2)
+        self.assert_clean()
+
+    async def test_same_source_version_repeated_with_second_capture_missing(self):
+        routes=[self.routes[0],copy.deepcopy(self.routes[0])]
+        bound=tuple(bound_route(r,i) for i,r in enumerate(routes))
+        self.assertEqual(bound[0].content_hash,bound[1].content_hash)
+        cps=tuple(Checkpoint('after','check-one',r.recording_id,r.version,
+                  r.content_hash,r.occurrence,r.steps[0],'after_postcondition','QA_SENT')
+                  for r in bound)
+        plan=Plan(bound,cps)
+        self.owner=ObservationPOC(self.root/'repeat',plan,plan.content_hash,
+                                  SyntheticDeviceSlot(),FakeReview())
+        capture=self.owner.capture
+        async def missing_second(cp,scene):
+            await capture(cp,replace(scene,missing=cp.occurrence==1))
+        self.owner.capture=missing_second  # Synthetic acquisition fault, real P1 queue.
+        bridge=P1ObservationBridge(self.owner,self.queue,self.read_state)
+        result=await bridge.run(routes)
+        self.assertEqual(bridge.result['status'],'succeeded')
+        self.assertEqual(len(bridge.result['entries']),2)
+        self.assertEqual(self.reads,[('QA_SENT',1)]*2)
+        self.assertEqual(result['checks']['check-one']['routes_with_evidence'],1)
+        self.assertEqual(result['checks']['check-one']['routes_expected'],2)
+        self.assertEqual([r['collection'] for r in result['rows']],
+                         ['SEALED','EVIDENCE_INSUFFICIENT'])
+        self.assertNotEqual(self.owner.key(cps[0]),self.owner.key(cps[1]))
+        snapshot=next(iter(self.owner.snapshots.values()))
+        saved=(self.owner.root/'result.json').read_bytes()
+        self.assertFalse(self.owner.seal(snapshot.key,snapshot.observed_state))
+        self.assertEqual(len(self.owner.snapshots),1)
+        self.assertEqual((self.owner.root/'result.json').read_bytes(),saved)
         self.assert_clean()
 
     async def test_cancel_after_first_input_keeps_snapshot_and_never_dispatches_second_route(self):
