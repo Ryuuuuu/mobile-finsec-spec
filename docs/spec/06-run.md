@@ -90,3 +90,7 @@ Finalizer는 선택 항목 전부의 terminal execution status, verdict, reason,
 ## 검증 게이트
 
 fake provider/tool의 지연·hang·취소 무시·늦은 이벤트·cleanup 실패 fault injection으로 먼저 검증한다. 이후 실제 ADB/Appium/relay/backend 자식 프로세스 종료 능력과 gateway 강제 경계를 실기기에서 확인한다. 테스트 완료 전 '완전한 격리' 또는 '자동 복구 보장'을 선언하지 않는다.
+
+## 관찰형 체크포인트 보완
+
+[관찰형 동선 체크포인트](10-observation-checkpoints.md)는 승인된 계획의 모든 해당 동선 증적을 별도 보존하고, 기기·셸·네트워크 조작 권한이 없는 하위 에이전트의 고정 자료 검토를 규정한다. 이 모드에는 더 넓은 도구 실행 권한을 상속하지 않는다. 설계 승인과 구현/시험 완료는 구별한다.
