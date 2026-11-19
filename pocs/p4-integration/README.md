@@ -69,4 +69,4 @@ Explicit recordings refresh discovers published bundles in a running Python chil
 
 Current independent observation window: [per-check v2 timing fixture](docs/OBSERVATION-TIMING-METADATA.md#independent-synthetic-gpui-follow-up), with 1/2 versus 0/2 reporting and explicit unmatched/ambiguous reasons. Preview/live rendering and the subsequent existing-window Results / Load final result interaction were observed; see the documented viewport and executable-version limits.
 
-[Completed synthetic report restart](docs/OBSERVATION-REPORT-RESTART.md) preserves per-run coverage and timing reasons through a fresh local child without restoring replay. The history-picker UI remains outside this bounded contract.
+[Completed synthetic report restart](docs/OBSERVATION-REPORT-RESTART.md) preserves per-run coverage and timing reasons through a fresh local child without restoring replay. The subsequent [synthetic Results history picker](docs/GPUI-OBSERVATION-HISTORY.md) adds UTC date/time selection and was verified after a full Windows app/child restart.

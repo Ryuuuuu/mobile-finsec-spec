@@ -81,3 +81,5 @@ See [versioned timing and synthetic v2 GPUI results](OBSERVATION-TIMING-METADATA
 The [interactive Windows follow-up](OBSERVATION-TIMING-METADATA.md#interactive-windows-result-follow-up) subsequently reached Results and loaded all final rows in the existing window. It supersedes the earlier navigation blocker only for that observed run; smaller viewport reachability remains untested.
 
 The subsequent [small-window regression](GPUI-OBSERVATION-SCROLL.md) reproduced below-fold clipping, added a constrained body scroll viewport and verified the last rows in an actual 277-pixel-high Windows window. Its remaining viewport/accessibility limits are recorded separately.
+
+[Completed Results history](GPUI-OBSERVATION-HISTORY.md) now supports explicit saved-run selection after app restart. It records the duplicate accessibility-label fix, actual two-run Windows verification and remaining keyboard navigation limitation.
