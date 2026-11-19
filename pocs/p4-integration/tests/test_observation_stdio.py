@@ -15,6 +15,11 @@ class ObservationAPITests(unittest.IsolatedAsyncioTestCase):
             api.operation('start',{'plan_hash':preview['plan_hash']})
             await api.task
             reply=api.operation('result',{});result=reply['result']
+            self.assertEqual(reply['archive_status'],'saved')
+            restarted=ObservationAPI(root)
+            restored=restarted.operation('load_completed',dict(run_id=result['run_id'],plan_hash=result['plan_hash']))
+            self.assertEqual(restored['result'],result)
+            self.assertEqual(restarted.operation('status',{})['status'],'idle')
             self.assertEqual(result['contract'],'synthetic-observation.v2')
             self.assertEqual([(result['checks'][c]['routes_with_evidence'],result['checks'][c]['routes_expected'])
                               for c in ('before-check','after-check')],[(1,2),(0,2)])

@@ -68,3 +68,5 @@ The previous P2/P3-coupled architecture, full-suite command and CLI examples are
 Explicit recordings refresh discovers published bundles in a running Python child, disables damaged entries and clears stale selection after scan failure. This is a bounded synchronous API, not a native UI or filesystem watcher.
 
 Current independent observation window: [per-check v2 timing fixture](docs/OBSERVATION-TIMING-METADATA.md#independent-synthetic-gpui-follow-up), with 1/2 versus 0/2 reporting and explicit unmatched/ambiguous reasons. Preview/live rendering and the subsequent existing-window Results / Load final result interaction were observed; see the documented viewport and executable-version limits.
+
+[Completed synthetic report restart](docs/OBSERVATION-REPORT-RESTART.md) preserves per-run coverage and timing reasons through a fresh local child without restoring replay. The history-picker UI remains outside this bounded contract.

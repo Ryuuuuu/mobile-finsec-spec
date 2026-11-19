@@ -134,3 +134,5 @@ not_applicable과 unknown은 사유와 별도 개수·행을 보존하되 applic
 [합성 체크포인트 POC](../../pocs/p4-integration/docs/OBSERVATION-CHECKPOINT-POC.md)는 고정 계획·QA 상태·가짜 검토기로 일부 경계를 시험한다. 위 전체 수용 계획의 완료가 아니다. 실제 자식 프로세스 격리와 기기 연결은 미구현이며, 일반 Python 실행을 읽기 전용 격리로 간주하지 않는다.
 
 후속 독립 합성 GPUI는 v2를 명시적으로 선택한다. [항목별 타이밍 POC 및 검증 한계](../../pocs/p4-integration/docs/OBSERVATION-TIMING-METADATA.md#independent-synthetic-gpui-follow-up) 참조. 기존 v1 브리지와 기기 경로는 유지하며, 위 v2 UI 미구현 설명은 최초 reporting-only 단계의 이력이다. 최종 보고는 승인된 UNMATCHED/AMBIGUOUS를 읽기 전용 메타데이터로 구분하고 체크포인트나 동작을 만들어내지 않는다.
+
+완료 합성 보고 재시작 계약은 [별도 POC 명세](../../pocs/p4-integration/docs/OBSERVATION-REPORT-RESTART.md)를 따른다. 같은 run/plan의 완료 보고만 읽고 활성 재생·승인·검토 작업은 복원하지 않는다. 과거 타이밍 정보 부재는 명시하며 현재 계획으로 추정하지 않는다.

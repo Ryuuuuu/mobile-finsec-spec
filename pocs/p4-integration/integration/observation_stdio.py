@@ -4,6 +4,7 @@ from dataclasses import asdict
 from pathlib import Path
 from .observation_poc import Route,Checkpoint,Plan,Scene,FakeReview,ObservationPOC,SyntheticDeviceSlot,Applicability,digest
 from .observation_matching import TimingRule,QAEvent,match_timing
+from .observation_archive import save_completed,load_completed
 
 LIMIT=262144
 
@@ -13,7 +14,7 @@ class ObservationAPI:
         if mode not in ('v1','v2'):raise ValueError('UNSUPPORTED_SYNTHETIC_MODE')
         self.mode=mode;self.matching=None;self.run_matching=None
         self.root=Path(root);self.revision=1;self.approved=None;self.owner=None;self.task=None
-        self.slot=SyntheticDeviceSlot();self.error=None
+        self.slot=SyntheticDeviceSlot();self.error=None;self.archive_status='not_saved'
         self.make_plan()
 
     def make_plan(self):
@@ -39,6 +40,9 @@ class ObservationAPI:
         self.plan=Plan(routes,cps,review_timeout=8)
 
     def operation(self,op,args):
+        if op=='load_completed':
+            try:return load_completed(self.root,args.get('run_id'),args.get('plan_hash'))
+            except (OSError,ValueError,KeyError,TypeError,AttributeError,RecursionError):return dict(status='COMPLETED_REPORT_UNAVAILABLE_OR_INVALID')
         if op=='preview':
             return dict(status='ok',revision=self.revision,plan_hash=self.plan.content_hash,
                         checkpoints=[asdict(c) for c in self.plan.checkpoints],
@@ -63,8 +67,15 @@ class ObservationAPI:
             self.run_matching=json.loads(json.dumps(self.matching))
             scenes={('route-A',0,'tap'):Scene(),('route-A',1,'tap'):Scene(missing=self.mode=='v2' or not self.revision%2)}
             self.error=None
+            self.archive_status='not_saved'
             async def execute():
-                try:await self.owner.run(scenes)
+                try:
+                    await self.owner.run(scenes)
+                    if self.owner.final['replay_status']=='completed':
+                        try:
+                            save_completed(self.root,self.owner.final,self.run_matching)
+                            self.archive_status='saved'
+                        except (OSError,ValueError,KeyError,TypeError):self.archive_status='REPORT_ARCHIVE_FAILED'
                 except Exception:self.error='EXECUTION_OR_STORAGE_ERROR'
             self.task=asyncio.create_task(execute())
             return dict(status='accepted',run_id=self.owner.run_id)
@@ -74,7 +85,7 @@ class ObservationAPI:
                         rows=list(self.owner.rows.values()),final_available=self.owner.final is not None)
         if op=='result':
             if not self.owner or self.owner.final is None:return dict(status='not_finalized')
-            return dict(status='ok',result=self.owner.final,matching_report=self.run_matching)
+            return dict(status='ok',result=self.owner.final,matching_report=self.run_matching,archive_status=self.archive_status)
         if op=='cancel':
             if self.owner:self.owner.cancel.set()
             return dict(status='cancel_requested')
