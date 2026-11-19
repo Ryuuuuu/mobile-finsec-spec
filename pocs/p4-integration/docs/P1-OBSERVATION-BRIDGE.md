@@ -1,5 +1,7 @@
 # P1 replay boundary to synthetic observation review
 
+Later [fixed QA state reader A34 acceptance](QA-STATE-DEVICE-VALIDATION.md) validates normal A -> B device replay with state-only fake review. The tests described below remain synthetic; that follow-up does not establish GPUI observation UI or real reviewer isolation.
+
 Follow-up to `2cdaff7` and [the observation specification](../../../docs/spec/10-observation-checkpoints.md). This validates the **actual P1 Engine -> CombinedRun -> ReplayQueue code**, with a synthetic device adapter and a mock RECORD/STOP peer. No GPUI input, A34 operation, real packet transport, actual model or inspection skill runs in these tests.
 
 ## Minimal connection

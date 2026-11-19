@@ -72,7 +72,7 @@ class Plan:
             raise ValueError('VERSION_OR_APPROVAL_MISMATCH')
         if not isinstance(self.routes, tuple) or not isinstance(self.checkpoints, tuple):
             raise ValueError('IMMUTABLE_PLAN_REQUIRED')
-        if not 0 < self.capture_timeout <= 1 or not 0 < self.review_timeout <= 1:
+        if not 0 < self.capture_timeout <= 1 or not 0 < self.review_timeout <= 30:
             raise ValueError('INVALID_DEADLINE')
         if not 1 <= len(self.routes) <= 10 or not 1 <= len(self.checkpoints) <= 100:
             raise ValueError('PLAN_LIMIT')

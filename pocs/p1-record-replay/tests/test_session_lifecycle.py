@@ -69,6 +69,17 @@ class SessionTimeoutTest(unittest.TestCase):
         with self.assertRaises(TypeError):
             Appium('TEST-SERIAL', PACKAGE, 'http://127.0.0.1:4723', 90)
 
+    def test_request_deadline_override_only_shortens_default(self):
+        adapter=Appium('TEST-SERIAL',PACKAGE)
+        opener=Mock();opener.open.side_effect=lambda *a,**kw:response()
+        with patch('pc.adapter.urllib.request.build_opener',return_value=opener):
+            adapter.request('GET','/session/qa/element/state/text',timeout=.4)
+        self.assertEqual(opener.open.call_args.kwargs['timeout'],.4)
+        for value in (True,0,-1,21,float('nan'),float('inf'),'1'):
+            with patch('pc.adapter.urllib.request.build_opener') as factory:
+                with self.assertRaises(ValueError):adapter.request('GET','/status',timeout=value)
+                factory.assert_not_called()
+
     def test_create_timeout_is_uncertain_and_is_not_retried(self):
         adapter = Appium('TEST-SERIAL', PACKAGE, session_create_timeout=120)
         opener = Mock()

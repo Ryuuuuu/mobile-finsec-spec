@@ -14,11 +14,13 @@ class Appium:
         if type(session_create_timeout) is not int or not 30<=session_create_timeout<=300: raise ValueError('Session creation timeout must be an integer from 30 to 300 seconds')
         self.device=device; self.package=package; self.url=url.rstrip('/'); self.session=None; self.uncertain=False
         self.session_create_timeout=session_create_timeout
-    def request(self,method,path,data=None):
+    def request(self,method,path,data=None,*,timeout=None):
         req=urllib.request.Request(self.url+path,data=None if data is None else json.dumps(data).encode(),headers={'Content-Type':'application/json'},method=method)
         # Creating a session includes helper setup and instrumentation startup.
         # Keep ordinary input/observation/DELETE requests on the shorter budget.
-        timeout=self.session_create_timeout if (method,path)==('POST','/session') else 20
+        default_timeout=self.session_create_timeout if (method,path)==('POST','/session') else 20
+        if timeout is None:timeout=default_timeout
+        elif type(timeout) not in (int,float) or not 0<timeout<=default_timeout:raise ValueError('Request timeout must shorten the default budget')
         try:
             # Ignore ambient proxy configuration for the local automation server.
             with urllib.request.build_opener(urllib.request.ProxyHandler({})).open(req,timeout=timeout) as r: value=json.load(r).get('value')
