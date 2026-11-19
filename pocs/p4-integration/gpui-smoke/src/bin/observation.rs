@@ -17,11 +17,11 @@ impl Observation{
  }
  fn poll_later(&mut self,cx:&mut Context<Self>){cx.spawn(async move|entity,cx|{cx.background_executor().timer(Duration::from_millis(150)).await;let _=entity.update(cx,|t,cx|{if t.active{if t.busy{t.poll_later(cx);}else{t.send("status",json!({}),cx);}}});}).detach();}
 }
-fn checkpoint_text(c:&Value)->String{format!("{} {} / selection occurrence {} (zero-based) / step {} / {}",c["recording_id"],c["route_version"],c["occurrence"],c["step_id"],c["phase"])}
+fn checkpoint_text(c:&Value)->String{let execution=c["occurrence"].as_u64().and_then(|n|n.checked_add(1)).map(|n|n.to_string()).unwrap_or("unknown".into());format!("{} {} / execution {} / step {} / {}",c["recording_id"],c["route_version"],execution,c["step_id"],c["phase"])}
 fn row_text(row:&Value)->String{format!("{} | evidence {} | review {} | reason {}",checkpoint_text(&row["checkpoint"]),if row["evidence_ref"].is_string(){1}else{0},row["review"],row["reason"])}
 impl Render for Observation{fn render(&mut self,_:&mut Window,cx:&mut Context<Self>)->impl IntoElement{
  let mut body=div().flex().flex_col().gap_3();
- if self.tab==0{body=body.child(Label::new("Record / Same synthetic route twice: occurrences 0 -> 1. No recording or inspection selection here."));}
+ if self.tab==0{body=body.child(Label::new("Record / Same synthetic route twice: execution 1 -> 2. No recording or inspection selection here."));}
  else if self.tab==1{
   let hash=self.preview["plan_hash"].as_str().unwrap_or("").to_string();
   let approval=if self.approved.is_empty(){"not approved"}else if self.approved==hash{"approved current version"}else{"STALE approval - version mismatch"};
@@ -32,7 +32,7 @@ impl Render for Observation{fn render(&mut self,_:&mut Window,cx:&mut Context<Se
    .child(Label::new(format!("Capture deadline {}s / review deadline {}s. Fixed QA state only; no raw images, packets or inputs.",self.preview["capture_timeout"],self.preview["review_timeout"])));
   for (i,c) in self.preview["checkpoints"].as_array().into_iter().flatten().enumerate(){body=body.child(Label::new(format!("{} / {} / expected {} / state-only evidence",c["check_id"],checkpoint_text(c),c["expected"])).id(("cp",i)));}
   body=body.child(Button::new("approve").label("Approve displayed plan hash").disabled(hash.is_empty()||self.active||self.busy||self.blocked).on_click(cx.listener(|t,_,_,cx|t.send("approve",json!({"plan_hash":t.preview["plan_hash"]}),cx))))
-   .child(Button::new("version").label("Load newer fixed version / only occurrence 1 evidence").disabled(hash.is_empty()||self.active||self.busy||self.blocked).on_click(cx.listener(|t,_,_,cx|t.send("new_version",json!({}),cx))))
+   .child(Button::new("version").label("Load newer fixed version / execution 2 missing evidence").disabled(hash.is_empty()||self.active||self.busy||self.blocked).on_click(cx.listener(|t,_,_,cx|t.send("new_version",json!({}),cx))))
    .child(Button::new("run").primary().label("Run using last approved hash (stale is rejected)").disabled(self.approved.is_empty()||self.active||self.busy||self.blocked).on_click(cx.listener(|t,_,_,cx|t.send("start",json!({"plan_hash":t.approved}),cx))))
    .child(Label::new(format!("Live replay: {} | review/finalization: {}",self.progress["replay"],self.progress["status"])));
   for (i,r) in self.progress["rows"].as_array().into_iter().flatten().enumerate(){body=body.child(Label::new(row_text(r)).id(("live",i)));}
@@ -50,7 +50,7 @@ impl Render for Observation{fn render(&mut self,_:&mut Window,cx:&mut Context<Se
 fn main(){application().with_assets(assets::Assets).run(|cx|{init(cx);open_window(WindowOptions::default(),cx,|_,cx|cx.new(|_|Observation::new())).expect("observation window");});}
 
 #[cfg(test)]mod tests{use super::{checkpoint_text,row_text,session};use serde_json::json;use std::time::Duration;
- #[test]fn repeated_selection_identity_is_visible_on_all_row_surfaces(){let c=json!({"recording_id":"route-A","route_version":"v2","occurrence":0,"step_id":"tap","phase":"after_postcondition"});let mut other=c.clone();other["occurrence"]=json!(1);assert_ne!(checkpoint_text(&c),checkpoint_text(&other));for cp in [c,other]{let text=checkpoint_text(&cp);assert!(text.contains("zero-based")&&text.contains("v2"));let row=json!({"checkpoint":cp,"evidence_ref":null,"review":"NOT_REVIEWED","reason":"EVIDENCE_INSUFFICIENT"});assert!(row_text(&row).contains(&text));}}
+ #[test]fn repeated_selection_identity_is_visible_on_all_row_surfaces(){let c=json!({"recording_id":"route-A","route_version":"v2","occurrence":0,"step_id":"tap","phase":"after_postcondition"});let mut other=c.clone();other["occurrence"]=json!(1);assert_ne!(checkpoint_text(&c),checkpoint_text(&other));for (i,cp) in [c,other].into_iter().enumerate(){let text=checkpoint_text(&cp);assert!(text.contains(&format!("execution {}",i+1))&&text.contains("v2"));assert_eq!(cp["occurrence"],i);let row=json!({"checkpoint":cp,"evidence_ref":null,"review":"NOT_REVIEWED","reason":"EVIDENCE_INSUFFICIENT"});assert!(row_text(&row).contains(&text));}assert!(checkpoint_text(&json!({})).contains("execution unknown"));}
  #[test]fn coverage_row_keeps_gap_reason(){let row=json!({"checkpoint":{"recording_id":"route-B","step_id":"tap","phase":"after_postcondition"},"evidence_ref":null,"review":"NOT_REVIEWED","reason":"EVIDENCE_INSUFFICIENT"});let text=row_text(&row);assert!(text.contains("route-B")&&text.contains("evidence 0")&&text.contains("EVIDENCE_INSUFFICIENT"));}
  #[test]#[ignore="requires existing Python and disposable observation root"]fn actual_observation_pipe_contract(){
   let mut s=session::Session::start_observation().unwrap();
@@ -64,6 +64,6 @@ fn main(){application().with_assets(assets::Assets).run(|cx|{init(cx);open_windo
   let until=std::time::Instant::now()+Duration::from_secs(15);let mut pending=false;
   loop{let p=s.exchange("status",json!({})).unwrap();if p["status"]=="review_pending"{assert_eq!(p["replay"],"completed");pending=true;}if p["final_available"]==true{break;}assert!(std::time::Instant::now()<until);std::thread::sleep(Duration::from_millis(20));}
   assert!(pending);let r=s.exchange("result",json!({})).unwrap();assert_eq!(r["result"]["checks"]["mock-check"]["routes_with_evidence"],1);assert_eq!(r["result"]["checks"]["mock-check"]["routes_expected"],2);
-  let rows=r["result"]["rows"].as_array().unwrap();assert_eq!(rows[0]["reason"],"EVIDENCE_INSUFFICIENT");assert_eq!(rows[1]["review"],"REVIEW_TIMEOUT");for (i,row) in rows.iter().enumerate(){assert_eq!(row["checkpoint"]["occurrence"],i);assert_eq!(row["checkpoint"]["recording_id"],"route-A");assert!(row_text(row).contains(&format!("selection occurrence {i}")));}
+  let rows=r["result"]["rows"].as_array().unwrap();assert_eq!(rows[0]["review"],"REVIEW_TIMEOUT");assert_eq!(rows[1]["reason"],"EVIDENCE_INSUFFICIENT");for (i,row) in rows.iter().enumerate(){assert_eq!(row["checkpoint"]["occurrence"],i);assert_eq!(row["checkpoint"]["recording_id"],"route-A");assert!(row_text(row).contains(&format!("execution {}",i+1)));}
  }
 }

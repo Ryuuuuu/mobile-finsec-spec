@@ -22,7 +22,7 @@ class ObservationAPI:
         if op=='preview':
             return dict(status='ok',revision=self.revision,plan_hash=self.plan.content_hash,
                         checkpoints=[asdict(c) for c in self.plan.checkpoints],
-                        scenario='Same route occurrences 0/1 complete' if self.revision%2 else 'Only occurrence 1 has evidence (synthetic)',
+                        scenario='Same route executions 1/2 complete' if self.revision%2 else 'Only execution 1 has evidence; execution 2 missing (synthetic)',
                         capture_timeout=self.plan.capture_timeout,review_timeout=self.plan.review_timeout,
                         approved=self.approved==self.plan.content_hash)
         if op=='new_version':
@@ -38,7 +38,7 @@ class ObservationAPI:
             if args.get('plan_hash')!=self.plan.content_hash:return dict(status='PLAN_VERSION_MISMATCH')
             if self.approved!=self.plan.content_hash:return dict(status='PLAN_NOT_APPROVED')
             self.owner=ObservationPOC(self.root,self.plan,self.approved,self.slot,FakeReview(delay=9))
-            scenes={('route-A',0,'tap'):Scene(missing=not self.revision%2),('route-A',1,'tap'):Scene()}
+            scenes={('route-A',0,'tap'):Scene(),('route-A',1,'tap'):Scene(missing=not self.revision%2)}
             self.error=None
             async def execute():
                 try:await self.owner.run(scenes)

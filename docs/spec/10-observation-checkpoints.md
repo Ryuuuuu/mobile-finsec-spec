@@ -40,7 +40,7 @@ ObservationPlan
 
 `checkpoints[].selection_occurrence`는 `ordered_routes[]`의 정확한 선택 인스턴스를 참조한다. 같은 recording/version을 반복 선택해도 합치지 않는다. 현재 Python POC의 `occurrence` 필드가 이 값에 해당하며 P1 브리지는 0부터 시작하는 큐 위치로 바인딩한다. 첫 선택에만 증적이 있으면 커버리지는 1/2이고 두 번째 누락 사유를 보존한다. 같은 이벤트 재전달은 새 선택 인스턴스가 아니다. [반복 선택 회귀 근거](../../pocs/p4-integration/docs/P1-OBSERVATION-BRIDGE.md)를 참조한다.
 
-미리보기·실시간 진행·최종 결과의 각 행은 recording ID, 버전, `selection_occurrence`, 단계와 전후 이벤트를 함께 표시하여 반복 선택을 구분한다. 현재 독립 GPUI POC는 엔진 식별자를 바꾸지 않고 `selection occurrence 0/1 (zero-based)`로 표시한다. 따라서 occurrence 1은 두 번째 선택이다. 같은 ID/버전/단계를 두 번 선택하고 occurrence 1에만 증적이 있는 UI fixture는 첫 번째 누락과 두 번째 증적을 별도 행에 표시하고 전체 커버리지는 1/2로 유지해야 한다.
+미리보기·실시간 진행·최종 결과의 각 행은 recording ID, 버전, 선택 실행 번호, 단계와 전후 이벤트를 함께 표시하여 반복 선택을 구분한다. 내부 `selection_occurrence` 0/1은 변경하지 않으며 사용자 화면에는 `execution 1/2`로 표시한다. 번호가 없거나 유효하지 않으면 추정하지 않고 unknown으로 표시한다. 같은 ID/버전/단계를 두 번 선택하는 현재 UI fixture는 첫 실행(내부 occurrence 0)에만 증적이 있고 두 번째(내부 occurrence 1)는 누락이다. 두 행을 분리하고 전체 커버리지는 1/2로 유지해야 한다. 이전 occurrence 1 증적 사례는 두 번째 실행의 증적이었으므로 첫 실행 증적 요구의 수용 근거로 쓰지 않는다.
 
 단계 ID는 동선 버전 안에서 안정적이어야 한다. 화면 상태는 관측 가능한 QA 상태 조건으로 표현하고 임의 실행 문자열을 넣지 않는다. 모든 선택 점검 × 선택 동선(반복 선택 occurrence 포함)에 적용 관계를 남긴다. 관련 동선 하나만 대표로 고르지 않는다. 적용 여부가 unknown이면 공백으로 표시하고, 근거 없이 not_applicable로 줄이지 않는다. 같은 체크포인트가 여러 동선에 해당하면 **모든 해당 동선에서 별도 증적과 결과 행**을 만든다.
 
