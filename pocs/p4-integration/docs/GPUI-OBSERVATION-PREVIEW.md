@@ -77,3 +77,5 @@ One bounded supported-CUA pass reopened the prior window's Results tab successfu
 ## Per-check v2 follow-up
 
 See [versioned timing and synthetic v2 GPUI results](OBSERVATION-TIMING-METADATA.md#independent-synthetic-gpui-follow-up) for the current two-check fixture, 1/2 versus 0/2 coverage, retained matching reasons, v1 compatibility and bounded final-tab navigation blocker. Results still requires the separate Load final result action after finalization.
+
+The [interactive Windows follow-up](OBSERVATION-TIMING-METADATA.md#interactive-windows-result-follow-up) subsequently reached Results and loaded all final rows in the existing window. It supersedes the earlier navigation blocker only for that observed run; smaller viewport reachability remains untested.
