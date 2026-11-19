@@ -95,7 +95,7 @@ class ApplicabilityTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_v1_hash_contract_and_approval_compatibility(self):
         plan=Plan(self.plan.routes,self.plan.checkpoints)
-        legacy=asdict(plan);legacy.pop('selected_check_ids');legacy.pop('applicability')
+        legacy=asdict(plan);legacy.pop('selected_check_ids');legacy.pop('applicability');legacy.pop('observation_metadata_hash')
         self.assertEqual(plan.content_hash,digest(legacy))
         result=await self.owner(plan).run({('same-route',i,'tap'):Scene() for i in (0,1)})
         self.assertEqual(result['contract'],'synthetic-observation.v1')

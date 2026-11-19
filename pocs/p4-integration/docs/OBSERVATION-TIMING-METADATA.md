@@ -1,0 +1,13 @@
+# Declarative per-check timing: synthetic matching only
+
+Timing metadata is independent of the inspection skill body, which the user authors. A versioned `qa-observation-timing.v1` rule contains `check_id`, a condition kind (`state` or `event`), an allowlisted synthetic value, `before_dispatch`/`after_postcondition`, and required sanitized evidence (`qa_state` only). It contains no executable expression, selector, command, tool, model, raw payload or skill text.
+
+The pure `match_timing` function accepts at most 10 frozen rules and 200 predefined QA events, with the complete validated applicability matrix and existing immutable route occurrences. Each event binds recording ID/version/hash, occurrence, explicit step, phase, synthetic state and event label. Route mismatch and duplicate event identity are rejected. Only `QA_READY/QA_SENT/QA_OTHER`, `QA_ENTER/QA_SUBMIT` and the existing two phases are accepted.
+
+For every selected check and occurrence, zero candidates yields `UNMATCHED`, exactly one yields `MATCHED`, and multiple candidates yield `AMBIGUOUS`. Repeated screens are not resolved by choosing first/last. Unmatched/ambiguous reports have no selected step, phase or event ID; candidate count remains visible. Unknown/not-applicable applicability remains separate. The matcher returns data only; it never generates replay actions or executes a reviewer.
+
+Preview must identify metadata version/condition/evidence and each route version, occurrence, resolved step/phase or explicit match gap. A trusted synthetic fixture may convert only uniquely matched data into observation checkpoints. No match becomes a v2 `PLAN_CHECKPOINT_MISSING` reporting gap; missing acquisition at an existing checkpoint remains `EVIDENCE_INSUFFICIENT`. Matching does not prove the observation will occur during replay. All observation verdicts remain inconclusive.
+
+The metadata digest is included in v2 plan approval as `observation_metadata_hash`; metadata changes invalidate approval even if an existing checkpoint would remain the same. V1 omits the new field from its canonical hash and rejects nonempty metadata, preserving existing v1 approvals. Pre-metadata v2 in-memory callers default to the empty digest; serialized v2 plan rehydration/migration is not implemented. Existing finalized results are not rewritten.
+
+Synthetic tests verify separate before/after resolution for two check IDs on the same route; independent occurrences; repeated-screen ambiguity vs unmatched; bounded scope/reason/evidence rejection; deterministic output; metadata approval invalidation. There are no real skills, UI/device actions, model requests or network operations in this matcher. This does not establish real-app matching accuracy or automatic applicability assessment.

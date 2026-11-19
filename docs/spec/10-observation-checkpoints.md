@@ -19,6 +19,8 @@
 
 ## 불변 계획과 적용 범위
 
+점검별 관찰 시점은 사용자가 작성하는 검사 스킬 본문과 분리된 버전 메타데이터로 선언한다. 조건 화면/상태 또는 이벤트, 전후 phase, 필요한 비민감 증적 종류를 포함하며 실행 명령이나 도구 지시를 담지 않는다. 계획 미리보기는 동선 버전·선택 occurrence·단계와 매칭 근거를 표시한다. 후보 없음은 unmatched, 여러 후보는 ambiguous이며 임의로 첫 후보를 고르지 않는다. metadata 변경도 승인 해시에 반영한다. [합성 메타데이터·매칭 계약](../../pocs/p4-integration/docs/OBSERVATION-TIMING-METADATA.md)은 고정 QA 이벤트에 한정되며 실제 스킬·모델·앱 연결이 아니다.
+
 ```text
 ObservationPlan
   schema_version, project_id, plan_id, plan_revision, plan_hash

@@ -77,13 +77,14 @@ class Plan:
     schema_version: int = 1
     selected_check_ids: tuple[str, ...] = ()
     applicability: tuple[Applicability, ...] = ()
+    observation_metadata_hash: str = ''
 
     @property
     def content_hash(self):
         value = asdict(self)
         if self.schema_version == 1:
             # Preserve existing approved v1 plan hashes exactly.
-            value.pop('selected_check_ids'); value.pop('applicability')
+            value.pop('selected_check_ids'); value.pop('applicability'); value.pop('observation_metadata_hash')
         return digest(value)
 
     def validate(self, approved_hash):
@@ -111,9 +112,11 @@ class Plan:
             routes[key] = route
         matrix = {}
         if self.schema_version == 1:
-            if self.selected_check_ids != () or self.applicability != ():
+            if self.selected_check_ids != () or self.applicability != () or self.observation_metadata_hash:
                 raise ValueError('V1_APPLICABILITY_UNSUPPORTED')
         else:
+            if self.observation_metadata_hash and not re.fullmatch(r'[0-9a-f]{64}',self.observation_metadata_hash):
+                raise ValueError('INVALID_OBSERVATION_METADATA_HASH')
             if (type(self.selected_check_ids) is not tuple or not 1 <= len(self.selected_check_ids) <= 10
                     or type(self.applicability) is not tuple or len(self.applicability) > 100):
                 raise ValueError('APPLICABILITY_LIMIT_OR_MUTABILITY')
@@ -410,6 +413,7 @@ class ObservationPOC:
                       rows=rows, checks=checks, real_reviewer='unavailable', finalization='completed')
         if self.plan.schema_version == 2:
             result['applicability'] = [asdict(c) for c in self.plan.applicability]
+            result['observation_metadata_hash'] = self.plan.observation_metadata_hash
         try:
             self.event('finalization_ready')
             with (self.root/'result.tmp').open('x', encoding='utf-8') as stream:
