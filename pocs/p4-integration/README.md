@@ -18,6 +18,8 @@ Validation on Windows/Python 3.12.10: the explicit runner executed 155 structura
 
 ## Current design and validation links
 
+[GPUI fixed observation preview](docs/GPUI-OBSERVATION-PREVIEW.md) verifies a dedicated synthetic 3-tab GPUI-kit window, plan approval/version rejection and A/B coverage/review result display through an actual Python child. It is separate from the real-device workspace and has no real model or device connection.
+
 [A34 fixed QA state observation](docs/QA-STATE-DEVICE-VALIDATION.md) verifies two existing GUI-recorded QA routes through the actual replay bridge and allowlisted state-only acquisition. CLI harness, delayed fake reviewer only; no GPUI observation-plan UI, real AI or arbitrary-app claim.
 
 [P1 observation bridge](docs/P1-OBSERVATION-BRIDGE.md) connects actual P1 replay boundaries to fixed synthetic-state review, testing route order, snapshot timing, delayed review and cancellation. Device/network peers are mock; GPUI observation-plan UI and real reviewer isolation are not implemented.
