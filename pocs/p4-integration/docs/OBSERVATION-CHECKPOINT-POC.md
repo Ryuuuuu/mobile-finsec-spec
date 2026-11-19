@@ -31,6 +31,8 @@ Validation on Windows/Python 3.12: final focused suite **13/13 passed (0.553s)**
 
 ## Decisions and remaining gaps
 
+[Explicit applicability reporting](OBSERVATION-APPLICABILITY.md) adds an opt-in synthetic Plan/result v2. It preserves selected applicable occurrences without checkpoints as denominator gaps and keeps unknown/excluded cells visible. Existing v1 callers and their hashes remain unchanged; their historical checkpoint-only coverage is not silently upgraded. GPUI v2 support is not implemented or tested.
+
 ### Queue deadline clarification (2026-11-19)
 
 Previously `wait_for(dispatch(), review_timeout)` began when the review task ran, included lock waiting, but reported every expiration as `REVIEW_TIMEOUT`. Registration-to-task scheduling delay was outside that timer. The POC now fixes an absolute monotonic deadline at queue registration and persists `review_queued` before scheduling. Lock waiting consumes the same budget. Expiration before a persisted start event yields `REVIEW_QUEUE_EXPIRED` without invoking the reviewer; expiration after start yields `REVIEW_TIMEOUT`. A guard after lock acquisition prevents dispatch of expired work. Registration-event failure aborts finalization, preserving sealed evidence without publishing a completed result.

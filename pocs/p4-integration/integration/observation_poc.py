@@ -56,25 +56,44 @@ class Checkpoint:
 
 
 @dataclass(frozen=True)
+class Applicability:
+    check_id: str
+    recording_id: str
+    occurrence: int
+    status: str
+    reason: str
+
+
+APPLICABILITY_REASONS = {'applicable': 'QA_REQUIRED',
+                         'not_applicable': 'QA_NOT_APPLICABLE', 'unknown': 'QA_SCOPE_UNKNOWN'}
+
+
+@dataclass(frozen=True)
 class Plan:
     routes: tuple[Route, ...]
     checkpoints: tuple[Checkpoint, ...]
     capture_timeout: float = 0.02
     review_timeout: float = 0.1
     schema_version: int = 1
+    selected_check_ids: tuple[str, ...] = ()
+    applicability: tuple[Applicability, ...] = ()
 
     @property
     def content_hash(self):
-        return digest(asdict(self))
+        value = asdict(self)
+        if self.schema_version == 1:
+            # Preserve existing approved v1 plan hashes exactly.
+            value.pop('selected_check_ids'); value.pop('applicability')
+        return digest(value)
 
     def validate(self, approved_hash):
-        if self.schema_version != 1 or approved_hash != self.content_hash:
+        if type(self.schema_version) is not int or self.schema_version not in (1,2) or approved_hash != self.content_hash:
             raise ValueError('VERSION_OR_APPROVAL_MISMATCH')
         if not isinstance(self.routes, tuple) or not isinstance(self.checkpoints, tuple):
             raise ValueError('IMMUTABLE_PLAN_REQUIRED')
         if not 0 < self.capture_timeout <= 1 or not 0 < self.review_timeout <= 30:
             raise ValueError('INVALID_DEADLINE')
-        if not 1 <= len(self.routes) <= 10 or not 1 <= len(self.checkpoints) <= 100:
+        if not 1 <= len(self.routes) <= 10 or not (1 if self.schema_version==1 else 0) <= len(self.checkpoints) <= 100:
             raise ValueError('PLAN_LIMIT')
         routes = {}
         for route in self.routes:
@@ -90,6 +109,31 @@ class Plan:
             if key in routes:
                 raise ValueError('DUPLICATE_ROUTE_INSTANCE')
             routes[key] = route
+        matrix = {}
+        if self.schema_version == 1:
+            if self.selected_check_ids != () or self.applicability != ():
+                raise ValueError('V1_APPLICABILITY_UNSUPPORTED')
+        else:
+            if (type(self.selected_check_ids) is not tuple or not 1 <= len(self.selected_check_ids) <= 10
+                    or type(self.applicability) is not tuple or len(self.applicability) > 100):
+                raise ValueError('APPLICABILITY_LIMIT_OR_MUTABILITY')
+            for check in self.selected_check_ids: identifier(check)
+            if len(set(self.selected_check_ids)) != len(self.selected_check_ids):
+                raise ValueError('DUPLICATE_SELECTED_CHECK')
+            for cell in self.applicability:
+                if type(cell) is not Applicability or type(cell.occurrence) is not int:
+                    raise ValueError('INVALID_APPLICABILITY')
+                identifier(cell.check_id); identifier(cell.recording_id)
+                if type(cell.status) is not str or type(cell.reason) is not str:
+                    raise ValueError('INVALID_APPLICABILITY')
+                key = (cell.check_id, cell.recording_id, cell.occurrence)
+                if (cell.check_id not in self.selected_check_ids or (cell.recording_id,cell.occurrence) not in routes
+                        or cell.status not in APPLICABILITY_REASONS or cell.reason != APPLICABILITY_REASONS[cell.status]):
+                    raise ValueError('INVALID_APPLICABILITY')
+                if key in matrix: raise ValueError('DUPLICATE_APPLICABILITY')
+                matrix[key] = cell
+            expected = {(c,rid,occ) for c in self.selected_check_ids for rid,occ in routes}
+            if set(matrix) != expected: raise ValueError('INCOMPLETE_APPLICABILITY')
         keys = set()
         for cp in self.checkpoints:
             for value in (cp.checkpoint_id, cp.check_id, cp.step_id):
@@ -100,6 +144,10 @@ class Plan:
                 raise ValueError('CHECKPOINT_ROUTE_MISMATCH')
             if cp.phase not in PHASES or cp.expected not in STATES:
                 raise ValueError('UNSUPPORTED_OBSERVATION')
+            if self.schema_version == 2:
+                cell = matrix.get((cp.check_id,cp.recording_id,cp.occurrence))
+                if type(cp.occurrence) is not int or cell is None or cell.status != 'applicable':
+                    raise ValueError('CHECKPOINT_APPLICABILITY_CONTRADICTION')
             key = (cp.check_id, cp.recording_id, cp.occurrence, cp.checkpoint_id)
             if key in keys:
                 raise ValueError('DUPLICATE_CHECKPOINT')
@@ -324,18 +372,44 @@ class ObservationPOC:
                 row['reason'] = 'STEP_NOT_REACHED_REPLAY_' + self.replay_status.upper()
         self.phase = 'finalizing'
         rows = list(self.rows.values())
+        if self.plan.schema_version == 2:
+            # Reporting-only rows: never enter replay checkpoints, capture or review tasks.
+            for cell in self.plan.applicability:
+                matching = [r for r in rows if (r['checkpoint']['check_id'],r['checkpoint']['recording_id'],
+                            r['checkpoint']['occurrence']) == (cell.check_id,cell.recording_id,cell.occurrence)]
+                if matching: continue
+                route = next(r for r in self.plan.routes if (r.recording_id,r.occurrence)==(cell.recording_id,cell.occurrence))
+                reason = {'applicable':'PLAN_CHECKPOINT_MISSING','not_applicable':'NOT_APPLICABLE',
+                          'unknown':'APPLICABILITY_UNKNOWN'}[cell.status]
+                rows.append(dict(row_kind='applicability_gap', applicability=cell.status,
+                    applicability_reason=cell.reason,
+                    checkpoint=dict(check_id=cell.check_id,recording_id=route.recording_id,
+                        route_version=route.version,route_hash=route.content_hash,occurrence=route.occurrence,
+                        checkpoint_id=None,step_id=None,phase=None,expected=None),
+                    collection=reason,review='NOT_REVIEWED',evidence_ref=None,verdict='inconclusive',
+                    reason=reason,enforcement_verified=False))
         checks = {}
-        for check in sorted({r['checkpoint']['check_id'] for r in rows}):
+        check_ids = (self.plan.selected_check_ids if self.plan.schema_version == 2
+                     else {r['checkpoint']['check_id'] for r in rows})
+        for check in sorted(check_ids):
             selected = [r for r in rows if r['checkpoint']['check_id']==check]
             expected = {(r['checkpoint']['recording_id'],r['checkpoint']['occurrence']) for r in selected}
+            if self.plan.schema_version == 2:
+                expected = {(c.recording_id,c.occurrence) for c in self.plan.applicability
+                            if c.check_id==check and c.status=='applicable'}
             covered = {pair for pair in expected if all(r['collection']=='SEALED' for r in selected
                        if (r['checkpoint']['recording_id'],r['checkpoint']['occurrence'])==pair)}
             checks[check] = dict(routes_expected=len(expected), routes_with_evidence=len(covered),
                                  verdict='inconclusive', reason='OBSERVATION_ONLY_OR_GAPS')
-        result = dict(contract='synthetic-observation.v1', run_id=self.run_id, attempt_id=self.attempt_id,
+            if self.plan.schema_version == 2:
+                checks[check].update(routes_not_applicable=sum(c.check_id==check and c.status=='not_applicable' for c in self.plan.applicability),
+                    routes_unknown=sum(c.check_id==check and c.status=='unknown' for c in self.plan.applicability))
+        result = dict(contract='synthetic-observation.v'+str(self.plan.schema_version), run_id=self.run_id, attempt_id=self.attempt_id,
                       review_timing='enqueue-deadline.v1',
                       plan_hash=self.plan.content_hash, replay_status=self.replay_status,
                       rows=rows, checks=checks, real_reviewer='unavailable', finalization='completed')
+        if self.plan.schema_version == 2:
+            result['applicability'] = [asdict(c) for c in self.plan.applicability]
         try:
             self.event('finalization_ready')
             with (self.root/'result.tmp').open('x', encoding='utf-8') as stream:

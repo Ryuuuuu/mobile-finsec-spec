@@ -123,6 +123,10 @@ project_id + run_id + replay_attempt_id + plan_hash + check_id
 
 ## 제한된 구조 POC 후속
 
+합성 Plan v2는 `selected_check_ids × ordered_routes의 선택 occurrence` 전체 적용 행렬을 체크포인트와 독립적으로 검증한다. applicable인데 체크포인트가 전혀 없는 선택도 분모에 포함하고 `PLAN_CHECKPOINT_MISSING` 보고 행을 남긴다. 이 행은 단계·액션을 생성하거나 검토기에 전달하는 체크포인트가 아니다. 체크포인트가 있으나 증적이 없는 `EVIDENCE_INSUFFICIENT`, 단계 미도달과 구분한다. 결과는 판단 불가능을 유지한다.
+
+not_applicable과 unknown은 사유와 별도 개수·행을 보존하되 applicable 분모에 포함하지 않는다. 따라서 0/0은 양호나 완료된 검증의 뜻이 아니다. 행렬 누락·중복, 선택하지 않은 항목/동선, 상태별 허용 사유 불일치, not_applicable/unknown에 붙은 체크포인트는 계획 검증에서 거부한다. [v2 보고 계약과 호환성](../../pocs/p4-integration/docs/OBSERVATION-APPLICABILITY.md)은 합성 전용이다. 기존 v1·GPUI 소비자는 아직 v2로 이전하지 않았으며 새 보고 행의 GPUI 렌더링은 미검증이다.
+
 [P1 재생 경계 연결](../../pocs/p4-integration/docs/P1-OBSERVATION-BRIDGE.md)은 실제 P1 엔진·큐와 합성 기기 어댑터를 사용해 시점·동선 귀속·검토 지연·취소를 별도로 시험한다. GPUI 계획 UI와 실기기 상태 취득, 실제 검토기 격리를 완료했다는 뜻은 아니다.
 
 [합성 체크포인트 POC](../../pocs/p4-integration/docs/OBSERVATION-CHECKPOINT-POC.md)는 고정 계획·QA 상태·가짜 검토기로 일부 경계를 시험한다. 위 전체 수용 계획의 완료가 아니다. 실제 자식 프로세스 격리와 기기 연결은 미구현이며, 일반 Python 실행을 읽기 전용 격리로 간주하지 않는다.

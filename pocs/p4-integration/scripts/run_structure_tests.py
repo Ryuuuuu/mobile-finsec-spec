@@ -6,6 +6,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 PATTERNS = (
+    'test_observation_applicability.py',
     'test_qa_state_only.py',
     'test_observation_poc.py',
     'test_p1_observation_bridge.py',
