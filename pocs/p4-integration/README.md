@@ -18,6 +18,8 @@ Validation on Windows/Python 3.12.10: the explicit runner executed 155 structura
 
 ## Current design and validation links
 
+[P1 observation bridge](docs/P1-OBSERVATION-BRIDGE.md) connects actual P1 replay boundaries to fixed synthetic-state review, testing route order, snapshot timing, delayed review and cancellation. Device/network peers are mock; GPUI observation-plan UI and real reviewer isolation are not implemented.
+
 [Observation checkpoint POC](docs/OBSERVATION-CHECKPOINT-POC.md) tests approved immutable plans, separate synthetic-route evidence, coverage gaps, deduplication, cancellation and a delayed fixed fake reviewer without blocking synthetic replay. Real child isolation, model/inspection execution and device/GPUI wiring are not claimed.
 
 

@@ -112,4 +112,6 @@ project_id + run_id + replay_attempt_id + plan_hash + check_id
 
 ## 제한된 구조 POC 후속
 
+[P1 재생 경계 연결](../../pocs/p4-integration/docs/P1-OBSERVATION-BRIDGE.md)은 실제 P1 엔진·큐와 합성 기기 어댑터를 사용해 시점·동선 귀속·검토 지연·취소를 별도로 시험한다. GPUI 계획 UI와 실기기 상태 취득, 실제 검토기 격리를 완료했다는 뜻은 아니다.
+
 [합성 체크포인트 POC](../../pocs/p4-integration/docs/OBSERVATION-CHECKPOINT-POC.md)는 고정 계획·QA 상태·가짜 검토기로 일부 경계를 시험한다. 위 전체 수용 계획의 완료가 아니다. 실제 자식 프로세스 격리와 기기 연결은 미구현이며, 일반 Python 실행을 읽기 전용 격리로 간주하지 않는다.

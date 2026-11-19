@@ -69,6 +69,7 @@ class Engine:
         self.initial_condition=initial_condition; self.fixture=adapter.package==p.PACKAGE
         self.a=adapter; self.output=output; self.allow_coordinates=allow_coordinates; self.mode='idle'
         self.cancel=threading.Event(); self.guard=threading.Lock(); self.steps=[]; self.fallbacks=0; self.j=None
+        self.replay_observer=None  # Trusted host boundary only; never an agent/tool callback.
     @contextlib.contextmanager
     def operation(self):
         if not self.guard.acquire(blocking=False): raise RuntimeError('Busy: operation already running')
@@ -145,6 +146,9 @@ class Engine:
         if self.cancel.is_set(): raise InterruptedError('Cancelled before intent')
         self.j.write('intent',action_id=action_id,action=a,before=before) # fsync before any device input
         if self.cancel.is_set(): raise InterruptedError('Cancelled before dispatch')
+        if self.mode=='replaying' and self.replay_observer is not None:
+            self.replay_observer(action_id,'before_dispatch')
+        if self.cancel.is_set(): raise InterruptedError('Cancelled after observation')
         self.j.write('dispatch',action_id=action_id)
         try:
             t=a['type']
@@ -155,6 +159,8 @@ class Engine:
                 g=a['geometry']; xy=lambda pt:[int(pt[0]*g['width']),int(pt[1]*g['height'])]
                 self.a.gesture(xy(a['point']),xy(a['end']) if t=='swipe' else None)
             self.condition(a['post'],a['timeout'])
+            if self.mode=='replaying' and self.replay_observer is not None:
+                self.replay_observer(action_id,'after_postcondition')
             after=self.evidence(action_id,'after'); after['input']='not_applicable' if t=='wait' else 'dispatch_acknowledged_and_postcondition_observed'
             if self.cancel.is_set():raise InterruptedError('Cancelled during final observation')
             self.j.write('result',action_id=action_id,status='succeeded',after=after)

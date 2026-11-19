@@ -34,10 +34,12 @@ class Route:
     version: str
     occurrence: int
     steps: tuple[str, ...]
+    source_hash: str = ''
 
     @property
     def content_hash(self):
-        return digest(dict(recording_id=self.recording_id, version=self.version, steps=self.steps))
+        return digest(dict(recording_id=self.recording_id, version=self.version,
+                           steps=self.steps, source_hash=self.source_hash))
 
 
 @dataclass(frozen=True)
@@ -83,6 +85,8 @@ class Plan:
                     or len(set(route.steps)) != len(route.steps)):
                 raise ValueError('INVALID_ROUTE')
             key = (route.recording_id, route.occurrence)
+            if route.source_hash and not re.fullmatch(r'[0-9a-f]{64}',route.source_hash):
+                raise ValueError('INVALID_SOURCE_HASH')
             if key in routes:
                 raise ValueError('DUPLICATE_ROUTE_INSTANCE')
             routes[key] = route
@@ -283,6 +287,10 @@ class ObservationPOC:
             raise
         finally:
             self.slot.busy = False
+        return await self.finalize_reviews()
+
+    async def finalize_reviews(self):
+        """Called by a trusted host only after replay and its ownership cleanup."""
         self.phase = 'review_pending'
         self.event('review_pending')
         if self.cancel.is_set():

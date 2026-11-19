@@ -1,5 +1,7 @@
 # Synthetic observation checkpoint POC
 
+Follow-up: [P1 replay boundary bridge](P1-OBSERVATION-BRIDGE.md) now separately tests actual P1 queue/engine code with synthetic adapters. The standalone runner described below remains synthetic; actual device/GPUI observation and real reviewer isolation are still unverified.
+
 Implements a limited exerciser of [the approved observation contract](../../../docs/spec/10-observation-checkpoints.md), using `integration/observation_poc.py` and `tests/test_observation_poc.py`. It is not connected to native GPUI, P1's actual input engine, P2 packet access, A34, a model, or any inspection skill. The earlier actual native cancellation acceptance is [separate evidence](../../p1-record-replay/docs/NATIVE-QA-QUEUE.md).
 
 ## Executed scope
