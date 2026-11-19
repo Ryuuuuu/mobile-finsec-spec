@@ -63,7 +63,7 @@ class P1ObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assert_clean()
         result=await task
         self.assertEqual(result['checks']['check-one']['routes_with_evidence'],2)
-        self.assertTrue(all(r['review']=='REVIEW_TIMEOUT' for r in result['rows']))
+        self.assertTrue(all(r['review'] in ('REVIEW_TIMEOUT','REVIEW_QUEUE_EXPIRED') for r in result['rows']))
         self.assertEqual(len(self.owner.snapshots),4)
         self.assertTrue(all(s.observed_state in ('QA_READY','QA_SENT') for s in self.owner.snapshots.values()))
 

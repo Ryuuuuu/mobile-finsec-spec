@@ -118,8 +118,63 @@ class ObservationTests(unittest.IsolatedAsyncioTestCase):
         self.assertFalse(self.slot.busy)
         self.assertEqual([e['recording_id'] for e in owner.events if e['event']=='synthetic_input'],['route-a','route-b'])
         result=await task
-        self.assertTrue(all(r['review']=='REVIEW_TIMEOUT' for r in result['rows']))
+        self.assertTrue(all(r['review'] in ('REVIEW_TIMEOUT','REVIEW_QUEUE_EXPIRED') for r in result['rows']))
         self.assertEqual(result['replay_status'],'completed')
+
+    async def test_queue_expiry_while_first_fake_review_cancels_does_not_block_replay(self):
+        owner=self.owner(replace(self.plan,review_timeout=.08))
+        async def slow_fake(snapshot,configuration):
+            try:await asyncio.sleep(1)
+            except asyncio.CancelledError:
+                # Cooperative fake cancellation cleanup temporarily still owns the lock.
+                await asyncio.sleep(.08)
+                raise
+        with patch('integration.observation_poc._fixed_fake_review',slow_fake):
+            task=asyncio.create_task(owner.run(self.scenes))
+            for _ in range(100):
+                if owner.phase=='review_pending':break
+                await asyncio.sleep(.001)
+            self.assertEqual(owner.replay_status,'completed')
+            self.assertFalse(owner.slot.busy);self.assertFalse(task.done())
+            result=await task
+        self.assertEqual([r['review'] for r in result['rows']],['REVIEW_TIMEOUT','REVIEW_QUEUE_EXPIRED'])
+        self.assertEqual(result['review_timing'],'enqueue-deadline.v1')
+        keys=[owner.key(cp) for cp in self.plan.checkpoints]
+        self.assertEqual([e['key'] for e in owner.events if e['event']=='review_started'],keys[:1])
+        for key in keys:
+            queued=next(e for e in owner.events if e['event']=='review_queued' and e['key']==key)
+            finished=next(e for e in owner.events if e['event']=='review_finished' and e['key']==key)
+            self.assertLess(queued['sequence'],finished['sequence'])
+            self.assertAlmostEqual(queued['deadline_monotonic']-queued['queued_at_monotonic'],.08)
+        self.assertEqual(json.loads((owner.root/'result.json').read_text()),result)
+
+    async def test_expired_before_task_dispatch_and_queue_event_failure(self):
+        owner=self.owner(); cp=self.plan.checkpoints[0];key=owner.key(cp)
+        owner.seal(key,'QA_SENT')
+        await owner.review_one(owner.snapshots[key],asyncio.get_running_loop().time()-1)
+        self.assertEqual(owner.rows[key]['review'],'REVIEW_QUEUE_EXPIRED')
+        self.assertFalse(any(e['event']=='review_started' for e in owner.events))
+        owner=self.owner();event=owner.event
+        def broken(kind,**fields):
+            if kind=='review_queued':raise OSError('synthetic queue log failure')
+            return event(kind,**fields)
+        owner.event=broken
+        with self.assertRaises(OSError):await owner.run(self.scenes)
+        self.assertEqual(owner.phase,'finalizing_failed');self.assertFalse(owner.slot.busy)
+        self.assertEqual(owner.tasks,[]);self.assertFalse((owner.root/'result.json').exists())
+
+    async def test_review_start_or_finish_event_failure_never_publishes_final(self):
+        for failed_event in ('review_started','review_finished'):
+            with self.subTest(event=failed_event):
+                owner=self.owner();event=owner.event
+                def broken(kind,**fields):
+                    if kind==failed_event:raise OSError('synthetic review log failure')
+                    return event(kind,**fields)
+                owner.event=broken
+                with self.assertRaises(OSError):await owner.run(self.scenes)
+                self.assertEqual(owner.phase,'finalizing_failed')
+                self.assertFalse(owner.slot.busy);self.assertIsNone(owner.final)
+                self.assertFalse((owner.root/'result.json').exists())
 
     async def test_before_snapshot_precedes_input_and_capture_timeout_is_gap(self):
         cps=tuple(replace(c,phase='before_dispatch',expected='QA_READY') for c in self.plan.checkpoints)

@@ -204,7 +204,11 @@ class ObservationPOC:
                       'STATE_MISMATCH' if state != cp.expected else None)
             if reason is None:
                 if self.seal(key, state):
-                    self.tasks.append(asyncio.create_task(self.review_one(self.snapshots[key])))
+                    queued_at = asyncio.get_running_loop().time()
+                    deadline = queued_at + self.plan.review_timeout
+                    self.event('review_queued', key=key, queued_at_monotonic=queued_at,
+                               deadline_monotonic=deadline)
+                    self.tasks.append(asyncio.create_task(self.review_one(self.snapshots[key], deadline)))
                 return
         except asyncio.TimeoutError:
             reason = 'CAPTURE_TIMEOUT'
@@ -217,21 +221,31 @@ class ObservationPOC:
         if self.final is not None or self.cancel.is_set():
             self.event('late_review_ignored', key=snapshot.key)
             return False
-        if reason not in ('OBSERVATION_ONLY', 'REVIEW_TIMEOUT', 'REVIEW_ERROR'):
+        if reason not in ('OBSERVATION_ONLY', 'REVIEW_TIMEOUT', 'REVIEW_QUEUE_EXPIRED', 'REVIEW_ERROR'):
             raise ValueError('INVALID_FAKE_RESULT')
         self.rows[snapshot.key].update(review=reason, reason=reason)
         self.event('review_finished', key=snapshot.key, reason=reason)
         return True
 
-    async def review_one(self, snapshot):
+    async def review_one(self, snapshot, deadline):
+        loop = asyncio.get_running_loop()
+        started = False
         async def dispatch():
+            nonlocal started
             async with self.review_lock:
-                self.event('review_started', key=snapshot.key)
+                if loop.time() >= deadline:
+                    return 'REVIEW_QUEUE_EXPIRED'
+                self.event('review_started', key=snapshot.key, started_at_monotonic=loop.time())
+                started = True
+                if loop.time() >= deadline:
+                    return 'REVIEW_TIMEOUT'
                 return await _fixed_fake_review(snapshot, self.review)
         try:
-            reason = await asyncio.wait_for(dispatch(), self.plan.review_timeout)
+            remaining = deadline - loop.time()
+            reason = (await asyncio.wait_for(dispatch(), remaining)
+                      if remaining > 0 else 'REVIEW_QUEUE_EXPIRED')
         except asyncio.TimeoutError:
-            reason = 'REVIEW_TIMEOUT'
+            reason = 'REVIEW_TIMEOUT' if started else 'REVIEW_QUEUE_EXPIRED'
         self.accept_review(snapshot, reason)
 
     async def run(self, scenes):
@@ -319,6 +333,7 @@ class ObservationPOC:
             checks[check] = dict(routes_expected=len(expected), routes_with_evidence=len(covered),
                                  verdict='inconclusive', reason='OBSERVATION_ONLY_OR_GAPS')
         result = dict(contract='synthetic-observation.v1', run_id=self.run_id, attempt_id=self.attempt_id,
+                      review_timing='enqueue-deadline.v1',
                       plan_hash=self.plan.content_hash, replay_status=self.replay_status,
                       rows=rows, checks=checks, real_reviewer='unavailable', finalization='completed')
         try:
